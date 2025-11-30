@@ -1,0 +1,89 @@
+---
+title: Skills
+description: Skills are pre-configured knowledge and skill packages that provide AI agents with specialized capabilities in specific domains.
+icon: Puzzle
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+
+## What is a Skill?
+
+![TalkCody Skills](https://cdn.talkcody.com/images/skills.png)
+
+A Skill contains:
+- **System Prompt Snippets**: Behavior instructions injected into the agent
+- **Workflow Rules**: Execution steps for specific tasks
+- **Reference Documentation**: Domain knowledge and best practices
+- **Executable Scripts**: Automation for common tasks
+
+By activating different Skills, agents can quickly acquire specialized capabilities in specific domains.
+
+## Use Cases
+
+- **Database Development**: SQL syntax, query optimization, database design
+- **Code Review**: Coding standards, security checks, performance analysis
+- **Documentation Writing**: API docs, technical specs, user guides
+- **Test Development**: Unit testing, integration testing, test strategies
+
+## How to Use
+
+### Activate a Skill
+
+1. Click the **Skills icon** (puzzle icon) in the chat interface
+2. Select the desired Skill from the list
+3. The selected Skill is automatically applied to the current conversation
+
+### Download Skills
+1. Go to the **Skills page**
+2. Check the "Remote Skills" tab
+3. Click **Install** to download the desired Skill
+
+### Manage Skills
+
+**View Installed Skills**
+- Go to the **Skills page**
+- Check the "Local Skills" tab
+
+**Create Custom Skill**
+1. Click **Create New Skill**
+2. Fill in name and description
+3. Write system prompt snippet
+4. Add workflow rules (optional)
+5. Save
+
+## Relationship with Agents
+
+Differences between Skills and Agents:
+
+| Feature | Skills | Agents |
+|---------|--------|--------|
+| Purpose | Knowledge enhancement | Complete assistant |
+| Configuration | Prompt snippets | Full system prompt |
+| Switching | Can activate multiple simultaneously | Use one at a time |
+| Applicability | Specific domain knowledge | Specific task workflows |
+
+<Callout type="tip">
+An Agent can use multiple Skills simultaneously, gaining specialized capabilities across multiple domains.
+</Callout>
+
+## Best Practices
+
+### Writing Skill Prompts
+
+- Focus on a single domain
+- Provide specific guidance
+- Include example output formats
+- Avoid conflicts with other Skills
+
+### Combined Usage
+
+```
+Scenario: Backend API Development
+
+Activated Skills:
+- REST API Design
+- SQL Query Optimization
+- API Security
+- Error Handling
+```

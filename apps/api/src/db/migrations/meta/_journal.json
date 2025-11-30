@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1762658621304,
+      "tag": "0000_wakeful_tana_nile",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1762658621305,
+      "tag": "0001_add_fts5_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1731484800000,
+      "tag": "0002_add_display_name",
+      "breakpoints": false
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1737619200000,
+      "tag": "0004_add_r2_storage_fields",
+      "breakpoints": true
+    }
+  ]
+}

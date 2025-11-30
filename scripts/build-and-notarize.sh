@@ -1,0 +1,170 @@
+#!/bin/bash
+
+# TalkCody Automated Build and Notarization Script
+# Used to build, sign and notarize macOS DMG packages
+# Supports building corresponding architecture on ARM Mac and Intel Mac
+
+set -e  # Exit immediately on error
+
+echo "========================================="
+echo "TalkCody Build and Notarization Script (Single Architecture)"
+echo "========================================="
+echo ""
+
+# Color definitions
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Detect current machine architecture
+MACHINE_ARCH=$(uname -m)
+if [ "$MACHINE_ARCH" = "arm64" ]; then
+    BUILD_ARCH="aarch64"
+    ARCH_NAME="ARM64 (Apple Silicon)"
+elif [ "$MACHINE_ARCH" = "x86_64" ]; then
+    BUILD_ARCH="x86_64"
+    ARCH_NAME="x86_64 (Intel)"
+else
+    echo -e "${RED}Error: Unsupported architecture $MACHINE_ARCH${NC}"
+    exit 1
+fi
+
+echo -e "Detected architecture: ${BLUE}${ARCH_NAME}${NC}"
+echo -e "Build target: ${BLUE}${BUILD_ARCH}-apple-darwin${NC}"
+echo ""
+
+# Check required environment variables
+echo "Checking environment variables..."
+
+if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+    echo -e "${RED}Error: APPLE_SIGNING_IDENTITY environment variable is not set${NC}"
+    echo ""
+    echo "Please set signing identity, for example:"
+    echo 'export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAM_ID)"'
+    echo ""
+    exit 1
+fi
+
+echo -e "${GREEN}OK${NC} Signing identity: $APPLE_SIGNING_IDENTITY"
+
+# Check notarization credentials
+if ! xcrun notarytool history --keychain-profile "talkcody-notary" &>/dev/null; then
+    echo -e "${RED}Error: Notarization credentials not configured${NC}"
+    echo ""
+    echo "Please configure notarization credentials first:"
+    echo 'xcrun notarytool store-credentials "talkcody-notary" \'
+    echo '  --apple-id "your-email@example.com" \'
+    echo '  --password "your-app-specific-password" \'
+    echo '  --team-id "YOUR_TEAM_ID"'
+    echo ""
+    exit 1
+fi
+
+echo -e "${GREEN}OK${NC} Notarization credentials configured"
+echo ""
+
+# Step 1: Build frontend
+echo "Step 1/4: Building frontend..."
+bun run build
+echo -e "${GREEN}OK${NC} Frontend build complete"
+echo ""
+
+# Step 2: Build current architecture version
+echo "Step 2/4: Building ${ARCH_NAME} version..."
+bun run tauri build
+echo -e "${GREEN}OK${NC} ${ARCH_NAME} version build complete"
+echo ""
+
+# Step 3: Find DMG file
+echo "Step 3/4: Finding build artifacts..."
+
+# Handle x64 vs x86_64 naming convention
+if [ "$BUILD_ARCH" = "x86_64" ]; then
+    DMG_FILE=$(find src-tauri/target/release/bundle/dmg \( -name "TalkCody_*_x64.dmg" -o -name "TalkCody_*_x86_64.dmg" \) 2>/dev/null | head -n 1)
+else
+    DMG_FILE=$(find src-tauri/target/release/bundle/dmg -name "TalkCody_*_${BUILD_ARCH}.dmg" 2>/dev/null | head -n 1)
+fi
+UPDATER_BUNDLE=$(find src-tauri/target/release/bundle/macos -name "*.app.tar.gz" -not -name "*.sig" 2>/dev/null | head -n 1)
+UPDATER_SIG=$(find src-tauri/target/release/bundle/macos -name "*.app.tar.gz.sig" 2>/dev/null | head -n 1)
+
+if [ -z "$DMG_FILE" ]; then
+    echo -e "${RED}Error: ${BUILD_ARCH} DMG file not found${NC}"
+    if [ "$BUILD_ARCH" = "x86_64" ]; then
+        echo "  Search path: src-tauri/target/release/bundle/dmg/TalkCody_*_x64.dmg or TalkCody_*_x86_64.dmg"
+    else
+        echo "  Search path: src-tauri/target/release/bundle/dmg/TalkCody_*_${BUILD_ARCH}.dmg"
+    fi
+    exit 1
+fi
+
+if [ -z "$UPDATER_BUNDLE" ]; then
+    echo -e "${RED}Error: Updater bundle not found${NC}"
+    exit 1
+fi
+
+if [ -z "$UPDATER_SIG" ]; then
+    echo -e "${RED}Error: Signature file not found${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}OK${NC} Found all build artifacts:"
+echo "  DMG: $(basename "$DMG_FILE") ($(du -h "$DMG_FILE" | cut -f1))"
+echo "  Updater Bundle: $(basename "$UPDATER_BUNDLE")"
+echo "  Signature: $(basename "$UPDATER_SIG")"
+echo ""
+
+# Step 4: Notarize DMG
+echo "Step 4/4: Submitting ${ARCH_NAME} DMG for notarization..."
+echo "  This may take 2-15 minutes, please wait..."
+echo ""
+
+if xcrun notarytool submit \
+    --keychain-profile "talkcody-notary" \
+    --wait \
+    "$DMG_FILE"; then
+    echo ""
+    echo -e "${GREEN}OK${NC} Notarization successful!"
+else
+    echo ""
+    echo -e "${RED}Error: Notarization failed${NC}"
+    echo ""
+    echo "View detailed log:"
+    echo "xcrun notarytool log <submission-id> --keychain-profile \"talkcody-notary\""
+    exit 1
+fi
+echo ""
+
+echo "Stapling notarization ticket to DMG..."
+if xcrun stapler staple "$DMG_FILE"; then
+    echo -e "${GREEN}OK${NC} Stapling successful"
+else
+    echo -e "${YELLOW}Warning${NC} Stapling failed (this may not affect distribution)"
+fi
+echo ""
+
+echo "Verifying notarization..."
+if spctl -a -vv -t install "$DMG_FILE" 2>&1 | grep -q "source=Notarized Developer ID"; then
+    echo -e "${GREEN}OK${NC} Notarization verification passed!"
+else
+    echo -e "${YELLOW}Warning${NC} Notarization verification failed, but this may be normal"
+fi
+echo ""
+
+# Complete
+echo "========================================="
+echo -e "${GREEN}${ARCH_NAME} build and notarization complete!${NC}"
+echo "========================================="
+echo ""
+echo "Final product location:"
+echo "  DMG: $DMG_FILE"
+echo "  Updater Bundle: $UPDATER_BUNDLE"
+echo "  Signature: $UPDATER_SIG"
+echo ""
+echo "Next steps:"
+echo "   1. Test DMG installation (optional)"
+echo "   2. Run release.sh to upload to R2"
+echo ""
+echo "Tip: Run this script on another Mac to build the other architecture!"
+echo ""

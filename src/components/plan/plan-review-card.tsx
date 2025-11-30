@@ -1,0 +1,152 @@
+import { Check, Edit2, X } from 'lucide-react';
+import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { usePlanModeStore } from '@/stores/plan-mode-store';
+
+interface PlanReviewCardProps {
+  planContent: string;
+}
+
+export function PlanReviewCard({ planContent }: PlanReviewCardProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(planContent);
+  const [showFeedbackInput, setShowFeedbackInput] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const { approvePlan, rejectPlan } = usePlanModeStore();
+
+  const handleApprove = () => {
+    // If content was edited, pass the edited version
+    const finalContent = isEditing && editedContent !== planContent ? editedContent : undefined;
+    approvePlan(finalContent);
+    setSubmitted(true);
+  };
+
+  const handleReject = () => {
+    if (!showFeedbackInput) {
+      // Show feedback input first
+      setShowFeedbackInput(true);
+      return;
+    }
+
+    // Submit rejection with feedback
+    rejectPlan(feedback.trim() || undefined);
+    setSubmitted(true);
+  };
+
+  const handleEdit = () => {
+    setIsEditing(!isEditing);
+    if (!isEditing) {
+      // Reset edited content when entering edit mode
+      setEditedContent(planContent);
+    }
+  };
+
+  const handleCancelFeedback = () => {
+    setShowFeedbackInput(false);
+    setFeedback('');
+  };
+
+  if (submitted) {
+    return (
+      <Card className="border-green-500/50 bg-green-500/10 p-4">
+        <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+          <Check className="size-5" />
+          <span className="font-medium">Plan review submitted successfully</span>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-blue-500/50 bg-blue-500/10 p-4 w-full overflow-hidden">
+      <div className="space-y-4 min-w-0">
+        {/* Header */}
+        <div>
+          <h3 className="font-semibold text-foreground text-lg">Implementation Plan Review</h3>
+          <p className="text-muted-foreground text-sm">
+            Please review the implementation plan below. You can approve it as-is, edit it, or
+            reject it with feedback.
+          </p>
+        </div>
+
+        {/* Plan Content */}
+        <div className="rounded-lg border border-border bg-background p-4 w-full overflow-hidden">
+          {isEditing ? (
+            <div className="space-y-2">
+              <div className="text-muted-foreground text-xs">
+                Edit the plan below (Markdown supported):
+              </div>
+              <Textarea
+                value={editedContent}
+                onChange={(e) => setEditedContent(e.target.value)}
+                className="min-h-[300px] resize-vertical font-mono text-sm w-full"
+                placeholder="Edit your plan here..."
+              />
+            </div>
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+              <ReactMarkdown>{planContent}</ReactMarkdown>
+            </div>
+          )}
+        </div>
+
+        {/* Feedback Input (shown when rejecting) */}
+        {showFeedbackInput && (
+          <div className="space-y-2 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4 w-full overflow-hidden">
+            <div className="text-foreground text-sm font-medium">
+              Please provide feedback on why you're rejecting this plan:
+            </div>
+            <Textarea
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              className="min-h-[100px] resize-none w-full"
+              placeholder="e.g., 'Please use JWT authentication instead of sessions', 'Add error handling for network failures', etc."
+            />
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-2 pt-2">
+          {showFeedbackInput ? (
+            <>
+              <Button variant="outline" onClick={handleCancelFeedback} className="min-w-[100px]">
+                Cancel
+              </Button>
+              <Button onClick={handleReject} variant="destructive" className="min-w-[100px]">
+                <X className="mr-2 size-4" />
+                Submit Rejection
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleEdit} className="min-w-[100px]">
+                <Edit2 className="mr-2 size-4" />
+                {isEditing ? 'Preview' : 'Edit'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowFeedbackInput(true)}
+                className="min-w-[120px] border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+              >
+                <X className="mr-2 size-4" />
+                Reject & Feedback
+              </Button>
+              <Button
+                onClick={handleApprove}
+                className="min-w-[100px] bg-green-600 hover:bg-green-700"
+              >
+                <Check className="mr-2 size-4" />
+                Approve
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}

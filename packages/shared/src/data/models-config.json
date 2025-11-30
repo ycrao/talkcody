@@ -1,0 +1,269 @@
+{
+  "version": "2025-11-27T15:00:00Z",
+  "models": {
+    "gpt-5-nano": {
+      "name": "GPT-5 Nano",
+      "imageInput": true,
+      "providers": ["aiGateway", "openai", "openRouter"],
+      "providerMappings": {
+        "openai": "gpt-5-nano",
+        "aiGateway": "openai/gpt-5-nano",
+        "openRouter": "openai/gpt-5-nano"
+      },
+      "pricing": { "input": "0.0000001", "output": "0.0000004" }
+    },
+    "gpt-51": {
+      "name": "GPT 5.1",
+      "imageInput": true,
+      "providers": ["aiGateway", "openai", "openRouter"],
+      "providerMappings": {
+        "openai": "gpt-5.1",
+        "aiGateway": "openai/gpt-5.1-thinking",
+        "openRouter": "openai/gpt-5.1"
+      },
+      "pricing": { "input": "0.00000125", "output": "0.00001" }
+    },
+    "gpt-5-mini": {
+      "name": "GPT-5 Mini",
+      "imageInput": true,
+      "providers": ["aiGateway", "openai", "openRouter"],
+      "providerMappings": {
+        "openai": "gpt-5-mini",
+        "aiGateway": "openai/gpt-5-mini",
+        "openRouter": "openai/gpt-5-mini"
+      },
+      "pricing": { "input": "0.0000004", "output": "0.0000016" }
+    },
+    "gpt-51-codex": {
+      "name": "GPT 5.1 Codex",
+      "imageInput": true,
+      "providers": ["aiGateway", "openai", "openRouter"],
+      "providerMappings": {
+        "openai": "gpt-5.1-codex",
+        "aiGateway": "openai/gpt-5.1-codex",
+        "openRouter": "openai/gpt-5.1-codex"
+      },
+      "pricing": { "input": "0.00000125", "output": "0.00001" }
+    },
+    "gpt-5.1-codex-mini": {
+      "name": "GPT 5.1 Codex Mini",
+      "imageInput": true,
+      "providers": ["aiGateway", "openai", "openRouter"],
+      "providerMappings": {
+        "openai": "gpt-5.1-codex-mini",
+        "aiGateway": "openai/gpt-5.1-codex-mini",
+        "openRouter": "openai/gpt-5.1-codex-mini"
+      },
+      "pricing": { "input": "0", "output": "0" }
+    },
+    "gemini-2.5-flash": {
+      "name": "Gemini 2.5 Flash",
+      "imageInput": true,
+      "providers": ["google", "aiGateway", "openRouter"],
+      "providerMappings": {
+        "google": "gemini-2.5-flash",
+        "aiGateway": "google/gemini-2.5-flash",
+        "openRouter": "google/gemini-2.5-flash"
+      },
+      "pricing": { "input": "0.0000003", "output": "0.0000025" }
+    },
+    "gemini-2.5-pro": {
+      "name": "Gemini 2.5 Pro",
+      "imageInput": true,
+      "providers": ["google", "aiGateway", "openRouter"],
+      "providerMappings": {
+        "google": "gemini-2.5-pro",
+        "aiGateway": "google/gemini-2.5-pro",
+        "openRouter": "google/gemini-2.5-pro"
+      },
+      "pricing": { "input": "0.0000025", "output": "0.00001" }
+    },
+    "gemini-3-pro-preview": {
+      "name": "Gemini 3 Pro Preview",
+      "imageInput": true,
+      "providers": ["google", "aiGateway", "openRouter"],
+      "providerMappings": {
+        "google": "gemini-3-pro-preview",
+        "aiGateway": "google/gemini-3-pro-preview",
+        "openRouter": "google/gemini-3-pro-preview"
+      },
+      "pricing": { "input": "0.0000025", "output": "0.00001" }
+    },
+    "gemini-2.5-flash-lite": {
+      "name": "Gemini 2.5 Flash Lite",
+      "imageInput": true,
+      "providers": ["google", "aiGateway", "openRouter"],
+      "providerMappings": {
+        "google": "gemini-2.5-flash-lite",
+        "aiGateway": "google/gemini-2.5-flash-lite",
+        "openRouter": "google/gemini-2.5-flash-lite"
+      },
+      "pricing": { "input": "0.0000001", "output": "0.0000004" }
+    },
+    "claude-opus-4.5": {
+      "name": "Claude Opus 4.5",
+      "imageInput": true,
+      "providers": ["aiGateway", "anthropic", "openRouter"],
+      "providerMappings": {
+        "anthropic": "claude-opus-4.5",
+        "aiGateway": "anthropic/claude-opus-4.5",
+        "openRouter": "anthropic/claude-opus-4.5"
+      },
+      "pricing": { "input": "0.000005", "output": "0.000025" }
+    },
+    "claude-sonnet-4.5": {
+      "name": "Claude Sonnet 4.5",
+      "imageInput": true,
+      "providers": ["aiGateway", "anthropic", "openRouter"],
+      "providerMappings": {
+        "anthropic": "claude-sonnet-4.5",
+        "aiGateway": "anthropic/claude-sonnet-4.5",
+        "openRouter": "anthropic/claude-sonnet-4.5"
+      },
+      "pricing": { "input": "0.000003", "output": "0.000015" }
+    },
+    "claude-haiku-4.5": {
+      "name": "Claude Haiku 4.5",
+      "imageInput": true,
+      "providers": ["aiGateway", "openRouter", "anthropic"],
+      "providerMappings": {
+        "anthropic": "claude-haiku-4-5",
+        "aiGateway": "anthropic/claude-haiku-4.5",
+        "openRouter": "anthropic/claude-haiku-4.5"
+      },
+      "pricing": { "input": "0.0000008", "output": "0.000004" }
+    },
+    "qwen3-coder-plus": {
+      "name": "Qwen 3 Coder",
+      "providers": ["qwen", "aiGateway", "openRouter"],
+      "providerMappings": {
+        "qwen": "qwen3-coder-plus",
+        "aiGateway": "alibaba/qwen3-coder-plus",
+        "openRouter": "qwen/qwen3-coder-plus"
+      },
+      "pricing": { "input": "0.0000004", "output": "0.0000016" }
+    },
+    "qwen3-max": {
+      "name": "Qwen 3 Max",
+      "providers": ["aiGateway"],
+      "pricing": { "input": "0", "output": "0" }
+    },
+    "kimi-k2-thinking": {
+      "name": "Kimi K2 Thinking",
+      "providers": ["aiGateway", "openRouter"],
+      "providerMappings": {
+        "aiGateway": "moonshotai/kimi-k2-thinking",
+        "openRouter": "moonshotai/kimi-k2-thinking"
+      },
+      "pricing": { "input": "0.0000005", "output": "0.000002" }
+    },
+    "deepseek-v3.1": {
+      "name": "Deepseek V3.1",
+      "providers": ["aiGateway", "openRouter"],
+      "providerMappings": {
+        "aiGateway": "deepseek/deepseek-v3.1",
+        "openRouter": "deepseek/deepseek-chat-v3.1"
+      },
+      "pricing": { "input": "0.0000001999", "output": "0.0000008001" }
+    },
+    "deepseek-v3.1-thinking": {
+      "name": "Deepseek V3.1 Thinking",
+      "providers": ["aiGateway"],
+      "pricing": { "input": "0.00000056", "output": "0.00000168" }
+    },
+    "grok-code-fast-1": {
+      "name": "Grok Code Fast",
+      "providers": ["aiGateway", "openRouter"],
+      "providerMappings": {
+        "aiGateway": "xai/grok-code-fast-1",
+        "openRouter": "x-ai/grok-code-fast-1"
+      },
+      "pricing": { "input": "0.0000002", "output": "0.0000015" }
+    },
+    "grok-4.1-fast": {
+      "name": "Grok 4.1 Fast",
+      "imageInput": true,
+      "providers": ["aiGateway", "openRouter"],
+      "providerMappings": {
+        "aiGateway": "xai/grok-4.1-fast-reasoning",
+        "openRouter": "x-ai/grok-4-fast"
+      },
+      "pricing": { "input": "0", "output": "0" }
+    },
+    "glm-4.6": {
+      "name": "GLM 4.6",
+      "providers": ["zhipu", "openRouter", "aiGateway", "anthropic", "ollama"],
+      "providerMappings": {
+        "zhipu": "glm-4.6",
+        "anthropic": "glm-4.6",
+        "aiGateway": "zai/glm-4.6",
+        "openRouter": "z-ai/glm-4.6:exacto",
+        "ollama": "glm-4.6:cloud"
+      },
+      "pricing": { "input": "0.0000006", "output": "0.000022" }
+    },
+    "minimax-m2": {
+      "name": "MiniMax 2",
+      "providers": ["MiniMax", "aiGateway", "openRouter", "anthropic", "openai"],
+      "providerMappings": {
+        "MiniMax": "MiniMax-M2-Stable",
+        "anthropic": "MiniMax-M2",
+        "openai": "MiniMax-M2",
+        "aiGateway": "minimax/minimax-m2",
+        "openRouter": "minimax/minimax-m2"
+      }
+    },
+    "gpt-oss:20b": {
+      "name": "GPT-OSS 20B (Local)",
+      "providers": ["ollama"],
+      "pricing": { "input": "0.00000007", "output": "0.0000003" }
+    },
+    "deepseek/deepseek-chat-v3.1:free": {
+      "name": "Deepseek V3 (Free)",
+      "imageGeneration": false,
+      "providers": ["openRouter"],
+      "pricing": { "input": "0", "output": "0" }
+    },
+    "z-ai/glm-4.5-air:free": {
+      "name": "GLM 4.5 Air (Free)",
+      "providers": ["openRouter"],
+      "pricing": { "input": "0", "output": "0" }
+    },
+    "qwen/qwen3-coder:free": {
+      "name": "Qwen 3 Coder (Free)",
+      "providers": ["openRouter"],
+      "pricing": { "input": "0", "output": "0" }
+    },
+    "gemini-2.5-flash-image": {
+      "name": "Nano Banana",
+      "imageInput": true,
+      "imageOutput": true,
+      "providers": ["openRouter", "google"],
+      "providerMappings": {
+        "google": "gemini-2.5-flash-image",
+        "aiGateway": "google/gemini-2.5-flash-image",
+        "openRouter": "google/gemini-2.5-flash-image"
+      },
+      "pricing": { "input": "0", "output": "0" }
+    },
+    "whisper-1": {
+      "name": "Whisper 1",
+      "audioInput": true,
+      "providers": ["openai"],
+      "pricing": { "input": "0.006", "output": "0" }
+    },
+    "scribe_v2_realtime": {
+      "name": "Scribe V2 Realtime",
+      "audioInput": true,
+      "providers": ["elevenlabs"],
+      "pricing": { "input": "0.004", "output": "0" }
+    },
+    "dall-e-3": {
+      "name": "Image DALL-E 3",
+      "imageInput": false,
+      "imageOutput": true,
+      "providers": ["openai"],
+      "pricing": { "input": "0", "output": "0" }
+    }
+  }
+}

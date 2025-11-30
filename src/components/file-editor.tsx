@@ -1,0 +1,149 @@
+import React from 'react';
+import { useAICompletion } from '@/hooks/use-ai-completion';
+import { useFileEditorState } from '@/hooks/use-file-editor-state';
+import { useGitGutter } from '@/hooks/use-git-gutter';
+import { useMonacoEditor } from '@/hooks/use-monaco-editor';
+import { logger } from '@/lib/logger';
+import { useRepositoryStore } from '@/stores/repository-store';
+import type { FileEditorProps } from '@/types/file-editor';
+import { FileEditorContent } from './file-editor/file-editor-content';
+import { FileEditorEmptyState } from './file-editor/file-editor-empty-state';
+import { FileEditorErrorState } from './file-editor/file-editor-error-state';
+import { FileEditorHeader } from './file-editor/file-editor-header';
+import { FileEditorLoadingState } from './file-editor/file-editor-loading-state';
+
+export function FileEditor({
+  filePath,
+  fileContent,
+  error,
+  isLoading,
+  hasUnsavedChanges: propHasUnsavedChanges,
+  onContentChange,
+  onFileSaved,
+  lineNumber,
+  onGlobalSearch,
+}: FileEditorProps) {
+  // Repository state
+  const rootPath = useRepositoryStore((state) => state.rootPath);
+  const selectFile = useRepositoryStore((state) => state.selectFile);
+
+  // Handle cross-file navigation from Monaco editor
+  const handleOpenFile = React.useCallback(
+    (targetFilePath: string, targetLineNumber?: number) => {
+      logger.debug('Cross-file navigation:', targetFilePath, targetLineNumber);
+      selectFile(targetFilePath, targetLineNumber);
+    },
+    [selectFile]
+  );
+
+  // Editor state for Git gutter (using state instead of ref to trigger re-renders)
+  const [editor, setEditor] = React.useState<any>(null);
+
+  // AI completion logic
+  const {
+    isAICompleting,
+    currentAICompletion,
+    getCurrentCompletionState,
+    clearAICompletion,
+    requestAICompletion,
+    acceptAICompletion,
+    dismissAICompletion,
+    shouldClearCompletion,
+    cleanup: cleanupAI,
+  } = useAICompletion(filePath);
+
+  // File editor state
+  const {
+    currentContent,
+    hasUnsavedChanges,
+    isSaving,
+    lastSavedTime,
+    isUserTyping,
+    handleContentChange: _handleContentChange,
+    setUserAction,
+    handleContentChangeWithCallback,
+    saveFileInternal,
+    cleanup: cleanupState,
+  } = useFileEditorState({
+    filePath,
+    fileContent,
+    onFileSaved,
+    isAICompleting,
+    currentAICompletion,
+    onContentChange,
+  });
+
+  // Monaco editor setup
+  const { handleEditorDidMount } = useMonacoEditor({
+    filePath,
+    fileContent,
+    lineNumber,
+    getCurrentCompletionState,
+    clearAICompletion,
+    requestAICompletion,
+    acceptAICompletion,
+    dismissAICompletion,
+    shouldClearCompletion,
+    setUserAction,
+    isUserTyping,
+    isAICompleting,
+    onGlobalSearch,
+    onOpenFile: handleOpenFile,
+  });
+
+  // Git gutter indicators (will run when editor state changes)
+  useGitGutter(editor, filePath, rootPath);
+
+  // Wrap handleEditorDidMount to capture editor in state
+  const handleEditorDidMountWithGit = React.useCallback(
+    (editor: any, monaco: any) => {
+      setEditor(editor);
+      handleEditorDidMount(editor, monaco);
+    },
+    [handleEditorDidMount]
+  );
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      cleanupAI();
+      cleanupState();
+    };
+  }, [cleanupAI, cleanupState]);
+
+  // Handle different states
+  if (!filePath) {
+    return <FileEditorEmptyState />;
+  }
+
+  if (isLoading) {
+    return <FileEditorLoadingState />;
+  }
+
+  if (error) {
+    return <FileEditorErrorState error={error} />;
+  }
+  const displayHasUnsavedChanges =
+    propHasUnsavedChanges !== undefined ? propHasUnsavedChanges : hasUnsavedChanges;
+
+  return (
+    <div className="flex h-full flex-1 flex-col">
+      <FileEditorHeader
+        currentAICompletion={currentAICompletion}
+        filePath={filePath}
+        hasUnsavedChanges={displayHasUnsavedChanges}
+        isAICompleting={isAICompleting}
+        isSaving={isSaving}
+        lastSavedTime={lastSavedTime}
+      />
+
+      <FileEditorContent
+        currentContent={currentContent}
+        filePath={filePath}
+        onContentChange={handleContentChangeWithCallback}
+        onEditorDidMount={handleEditorDidMountWithGit}
+        onSave={() => saveFileInternal(filePath, currentContent)}
+      />
+    </div>
+  );
+}

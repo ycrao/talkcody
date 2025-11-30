@@ -1,0 +1,647 @@
+---
+title: General Settings
+description: Application-wide settings and preferences
+icon: Settings2
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# General Settings
+
+Configure application-wide settings, appearance, language, and general preferences for TalkCody.
+
+## Overview
+
+General settings include:
+- Application appearance
+- Language and localization
+- Update preferences
+- Privacy settings
+- System integration
+- Performance options
+
+## Appearance
+
+### Theme
+
+**Application Theme**
+```
+Options:
+○ System (follows OS setting)
+● Dark
+○ Light
+```
+
+**Auto-switch**
+```
+☑ Follow system appearance
+Automatically matches macOS dark/light mode
+```
+
+**Custom Theme**
+```
+Settings → Appearance → Custom Theme
+Import custom color schemes
+```
+
+### Window Settings
+
+**Window Size**
+```
+Default Size: 1200×800
+☑ Remember window size
+☑ Remember window position
+```
+
+**Startup**
+```
+On Launch:
+○ New window
+● Restore previous session
+○ Welcome screen
+```
+
+**Sidebar**
+```
+Default width: 250px
+Position:
+● Left
+○ Right
+
+☑ Collapsible
+☑ Remember state
+```
+
+### UI Density
+
+**Interface Density**
+```
+Options:
+○ Compact
+● Comfortable (default)
+○ Spacious
+
+Affects:
+- Padding
+- Spacing
+- Font sizes
+- Button sizes
+```
+
+**Toolbar**
+```
+☑ Show toolbar
+☑ Show status bar
+☑ Show breadcrumbs
+Style: Icons / Icons + Text / Text only
+```
+
+## Language and Region
+
+### Display Language
+
+**Interface Language**
+```
+Options:
+● English
+○ 简体中文 (Simplified Chinese)
+○ 日本語 (Japanese)
+○ 한국어 (Korean)
+○ Español (Spanish)
+○ Français (French)
+○ Deutsch (German)
+```
+
+**Apply**: Restart required for changes
+
+### Localization
+
+**Date Format**
+```
+Options:
+● System default
+○ MM/DD/YYYY (US)
+○ DD/MM/YYYY (EU)
+○ YYYY-MM-DD (ISO)
+```
+
+**Time Format**
+```
+Options:
+● System default
+○ 12-hour (AM/PM)
+○ 24-hour
+```
+
+**Number Format**
+```
+Decimal separator: . or ,
+Thousands separator: , or .
+```
+
+## Updates
+
+### Update Channel
+
+**Channel Selection**
+```
+Options:
+● Stable (recommended)
+○ Beta
+○ Nightly
+```
+
+**Update Behavior**
+```
+☑ Check for updates automatically
+Frequency: Daily / Weekly / Monthly
+
+☑ Download updates automatically
+☐ Install updates automatically
+☑ Notify when updates available
+```
+
+### Update Settings
+
+**Pre-release**
+```
+☐ Install pre-release versions
+☐ Get beta features early
+```
+
+**Background Updates**
+```
+☑ Download in background
+☑ Install on quit
+☐ Prompt before installing
+```
+
+## Privacy
+
+### Data Collection
+
+**Telemetry**
+```
+☑ Send anonymous usage data
+Helps improve TalkCody
+
+Collected data:
+- Feature usage
+- Error reports
+- Performance metrics
+```
+
+**Crash Reports**
+```
+☑ Send crash reports automatically
+☐ Include system information
+☐ Include open files list
+```
+
+### AI Provider Data
+
+**Data Sharing**
+```
+☐ Share conversations with AI providers for training
+☑ Only send necessary data to AI APIs
+☑ Clear conversation history on exit
+```
+
+**Local Storage**
+```
+Conversation history:
+● Store locally (encrypted)
+○ Don't store
+○ Store for 30 days only
+
+Clear data:
+[Clear All Conversations]
+[Clear All Settings]
+```
+
+### Security
+
+**API Key Storage**
+```
+● Encrypted in system keychain
+○ Encrypted in app storage
+○ Don't store (enter each time)
+```
+
+**File Access**
+```
+☑ Warn before allowing file writes
+☑ Confirm destructive operations
+☑ Sandbox file operations to project
+```
+
+## System Integration
+
+### Default Applications
+
+**File Associations**
+```
+☑ Open code files with TalkCody
+Associated extensions:
+.js, .ts, .jsx, .tsx, .py, .go, .rs, etc.
+
+[Set as Default Editor]
+```
+
+**URL Handling**
+```
+☑ Handle talkcody:// URLs
+☑ Open links from web browser
+```
+
+### Command Line
+
+**CLI Tool**
+```
+☑ Install command line tool
+Command: talkcody
+
+Usage:
+$ talkcody .              # Open current directory
+$ talkcody file.ts       # Open specific file
+$ talkcody --help        # Show help
+```
+
+**Shell Integration**
+```
+☑ Add to PATH
+☑ Enable shell completions
+Shells: bash, zsh, fish
+```
+
+### Notifications
+
+**System Notifications**
+```
+☑ Show notifications
+☑ Sound effects
+☑ Badge icon
+```
+
+**Notification Types**
+```
+☑ AI response completed
+☑ File save completed
+☑ Errors and warnings
+☑ Updates available
+☐ Tool execution started
+```
+
+**Do Not Disturb**
+```
+☑ Respect system Do Not Disturb
+☑ Disable notifications in fullscreen
+```
+
+## Performance
+
+### Resource Usage
+
+**Memory**
+```
+Memory limit: Auto / 2GB / 4GB / 8GB
+☑ Release memory when minimized
+☑ Clear cache periodically
+```
+
+**CPU**
+```
+Background process priority: Low / Normal / High
+☑ Reduce CPU usage when idle
+Max background threads: 4
+```
+
+**Disk**
+```
+Cache size: 500MB
+☑ Clear old cache files
+☑ Compress stored data
+
+[Clear Cache Now]
+```
+
+### Network
+
+**Connection**
+```
+Timeout: 120 seconds
+Retries: 3
+
+☑ Use HTTP/2 when available
+☑ Enable connection pooling
+Max concurrent connections: 10
+```
+
+**Proxy**
+```
+Proxy settings:
+○ System proxy
+○ Manual proxy
+  HTTP Proxy: _______
+  HTTPS Proxy: _______
+  Bypass: localhost,127.0.0.1
+○ No proxy
+```
+
+**Bandwidth**
+```
+☑ Limit download speed
+Max: 10 MB/s
+
+☐ Limit upload speed
+Max: 1 MB/s
+```
+
+## Workspace
+
+### Default Directories
+
+**Project Directory**
+```
+Default location: ~/Documents/TalkCody
+☑ Remember last opened directory
+```
+
+**Temp Directory**
+```
+Temporary files: ~/.talkcody/temp
+☑ Clear on exit
+```
+
+**Logs Directory**
+```
+Log files: ~/.talkcody/logs
+Max log size: 100MB
+Retention: 7 days
+```
+
+### Backup
+
+**Auto Backup**
+```
+☑ Auto-backup conversations
+Frequency: Daily
+Location: ~/.talkcody/backups
+Keep: 30 days
+```
+
+**Manual Backup**
+```
+Export settings: [Export]
+Import settings: [Import]
+Backup location: [Choose]
+```
+
+## Advanced
+
+### Developer Settings
+
+**Developer Mode**
+```
+☐ Enable developer mode
+
+Features when enabled:
+- Debug console
+- Network inspector
+- Performance profiler
+- React DevTools
+```
+
+**Debug Logging**
+```
+☐ Enable debug logging
+Log level: Error / Warn / Info / Debug / Trace
+```
+
+**Experimental Features**
+```
+☐ Enable experimental features
+⚠️ May be unstable
+
+Available experiments:
+☐ New chat UI
+☐ Voice commands
+☐ Collaborative editing
+```
+
+### Database
+
+**Database Settings**
+```
+Database: SQLite
+Location: ~/.talkcody/talkcody.db
+Size: 45 MB
+
+[Vacuum Database]
+[Reset Database] ⚠️
+```
+
+**Maintenance**
+```
+☑ Auto-optimize database weekly
+☑ Backup before optimization
+[Run Maintenance Now]
+```
+
+### Reset Options
+
+**Selective Reset**
+```
+[Reset Window Position]
+[Reset Keyboard Shortcuts]
+[Reset Editor Settings]
+[Reset AI Settings]
+```
+
+**Complete Reset**
+```
+[Reset All Settings] ⚠️
+Keeps: Conversations, Projects
+Resets: All preferences to defaults
+
+[Factory Reset] 🚨
+Removes: Everything
+⚠️ This cannot be undone!
+```
+
+## Keyboard Shortcuts
+
+### Global Shortcuts
+
+| Action | Mac | Windows/Linux |
+|--------|-----|---------------|
+| Open Settings | `Cmd + ,` | `Ctrl + ,` |
+| New Chat | `Cmd + N` | `Ctrl + N` |
+| Open Project | `Cmd + O` | `Ctrl + O` |
+| Search | `Cmd + F` | `Ctrl + F` |
+| Command Palette | `Cmd + Shift + P` | `Ctrl + Shift + P` |
+
+### Customization
+
+**Custom Shortcuts**
+```
+Settings → General → Keyboard
+Click action to rebind
+```
+
+**Import Shortcuts**
+```
+☑ Import from VS Code
+☑ Import from IntelliJ
+☑ Import from Sublime Text
+```
+
+## Accessibility
+
+### Visual Accessibility
+
+**High Contrast**
+```
+☑ Use high contrast theme
+☑ Increase contrast in UI
+☑ Bold fonts
+```
+
+**Text Scaling**
+```
+UI scale: 100%
+Range: 75% - 200%
+
+☑ Scale cursor proportionally
+```
+
+**Motion**
+```
+☐ Reduce motion
+☐ Disable animations
+☐ Disable transitions
+```
+
+### Audio
+
+**Sound Effects**
+```
+☑ Enable sound effects
+☑ Notification sounds
+☐ Typing sounds
+☐ UI interaction sounds
+```
+
+**Volume**
+```
+Master volume: 80%
+Range: 0% - 100%
+```
+
+### Input
+
+**Keyboard**
+```
+☑ Enable keyboard navigation
+☑ Show focus indicators
+☑ Sticky keys support
+```
+
+**Mouse**
+```
+☑ Large cursor option
+☑ Shake cursor to locate
+Cursor speed: Normal
+```
+
+## Import/Export
+
+### Export Settings
+
+**Export Options**
+```
+☑ General settings
+☑ Editor settings
+☑ AI settings
+☑ Keyboard shortcuts
+☐ API keys (encrypted)
+☐ Conversation history
+
+[Export Settings]
+```
+
+**Export Format**
+```
+Format: JSON / YAML
+Encrypted: Yes / No
+```
+
+### Import Settings
+
+**Import from File**
+```
+[Choose File]
+☑ Merge with existing settings
+○ Replace existing settings
+```
+
+**Import from Another Computer**
+```
+Sync via:
+- iCloud (macOS)
+- File sharing
+- Git repository
+```
+
+## Troubleshooting
+
+### Diagnostic Tools
+
+**System Information**
+```
+[Copy System Info]
+
+Includes:
+- TalkCody version
+- OS version
+- Hardware specs
+- Installed plugins
+```
+
+**Connection Test**
+```
+[Test Internet Connection]
+[Test AI Provider APIs]
+[Test MCP Servers]
+```
+
+**Logs**
+```
+[Open Logs Folder]
+[View Recent Errors]
+[Export Debug Log]
+```
+
+### Reset Helpers
+
+**Common Issues**
+```
+App won't start:
+[Reset Window Position]
+
+Settings corrupted:
+[Reset to Defaults]
+
+Database issues:
+[Repair Database]
+```
+
+## Next Steps
+
+- [Editor Settings](/docs/configuration/editor-settings) - Configure the code editor
+- [Model Settings](/docs/configuration/model-settings) - AI model configuration
+- [API Keys](/docs/configuration/api-keys) - Set up AI providers
+
+<Callout type="success">
+Properly configured settings ensure TalkCody works perfectly for your workflow!
+</Callout>

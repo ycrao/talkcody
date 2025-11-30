@@ -1,0 +1,465 @@
+---
+title: Model Settings
+description: Configure AI models, temperature, tokens, and model behavior
+icon: SlidersHorizontal
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Model Settings
+
+Configure AI model behavior, parameters, and defaults to optimize TalkCody for your workflow.
+
+## Overview
+
+Model settings control:
+- **Default Model**: Which AI model to use by default
+- **Temperature**: Creativity vs consistency
+- **Max Tokens**: Response length limits
+- **Model Parameters**: Advanced configuration
+- **Model Availability**: Which models appear in selectors
+
+## Selecting Models
+
+### Default Model
+
+Set the model used for new conversations:
+
+1. Open Settings → Model Settings
+2. Select **Default Model**
+3. Choose from available models
+4. Save settings
+
+**Recommendations**:
+- **General use**: Claude 4.5 Sonnet, GPT-4.1
+- **Fast responses**: Claude Haiku, GPT-4.1 Turbo
+- **Code-heavy**: Qwen 3 Coder, Codestral
+- **Budget**: DeepSeek Chat, GLM 4.5 Air
+
+### Per-Conversation Model
+
+Override default for specific conversations:
+- Click model dropdown in chat interface
+- Select different model
+- Conversation continues with new model
+- Setting applies to that conversation only
+
+### Per-Agent Model
+
+Assign models to specific agents:
+- Navigate to Agents view
+- Edit agent
+- Set **Default Model** for that agent
+- Agent always uses assigned model
+
+## Available Models
+
+### OpenAI Models
+
+**GPT-4.1**
+- **Use for**: Complex reasoning, quality responses
+- **Context**: 128K tokens
+- **Speed**: Moderate
+- **Cost**: $$
+
+**GPT-4.1 Turbo**
+- **Use for**: Fast responses, general tasks
+- **Context**: 128K tokens
+- **Speed**: Fast
+- **Cost**: $
+
+**GPT-5** (Preview)
+- **Use for**: Cutting-edge capabilities
+- **Context**: 128K tokens
+- **Speed**: Moderate
+- **Cost**: $$$
+
+**GPT-4.1 Vision**
+- **Use for**: Image analysis, screenshots
+- **Context**: 128K tokens
+- **Special**: Supports image inputs
+- **Cost**: $$
+
+### Anthropic Models
+
+**Claude 4.5 Opus**
+- **Use for**: Most complex tasks, deep analysis
+- **Context**: 200K tokens
+- **Speed**: Slower
+- **Cost**: $$$
+
+**Claude 4.5 Sonnet**
+- **Use for**: Balanced performance and quality
+- **Context**: 200K tokens
+- **Speed**: Fast
+- **Cost**: $$
+
+**Claude Haiku**
+- **Use for**: Quick questions, simple tasks
+- **Context**: 200K tokens
+- **Speed**: Very fast
+- **Cost**: $
+
+### Google Models
+
+**Gemini 2.5 Pro**
+- **Use for**: Complex reasoning, long context
+- **Context**: 1M tokens
+- **Speed**: Moderate
+- **Cost**: $$
+
+**Gemini 2.5 Flash**
+- **Use for**: Fast, cost-effective tasks
+- **Context**: 1M tokens
+- **Speed**: Very fast
+- **Cost**: $
+
+**Gemini Pro Vision**
+- **Use for**: Image understanding
+- **Special**: Multimodal (text + images)
+- **Cost**: $$
+
+### Code-Specialized Models
+
+**Qwen 3 Coder**
+- **Use for**: Code generation, completions
+- **Context**: 128K tokens
+- **Special**: Trained specifically for code
+- **Cost**: $
+
+**Codestral** (via OpenRouter)
+- **Use for**: Code completion, generation
+- **Context**: 32K tokens
+- **Special**: Code-optimized
+- **Cost**: $$
+
+### Free/Budget Models
+
+**DeepSeek Chat**
+- **Use for**: Budget-friendly general tasks
+- **Context**: 64K tokens
+- **Cost**: Free tier available
+
+**GLM 4.5 Air**
+- **Use for**: Free model access
+- **Context**: 128K tokens
+- **Cost**: Free
+
+### Local Models (Ollama)
+
+**Llama 3.2**
+- **Use for**: Privacy, offline work
+- **Context**: Varies by size
+- **Cost**: Free (local compute)
+
+**CodeLlama**
+- **Use for**: Local code assistance
+- **Special**: Code-focused
+- **Cost**: Free (local compute)
+
+<Callout type="info">
+See the complete list of available models in Settings → Model Settings → Model List.
+</Callout>
+
+## Model Parameters
+
+### Temperature
+
+Controls randomness and creativity in responses.
+
+**Range**: 0.0 to 1.0
+
+**Settings**:
+- **0.0 - 0.3**: Focused and deterministic
+  - Use for: Code generation, factual answers, consistency
+  - Example: "Write a function to sort an array"
+
+- **0.4 - 0.7**: Balanced (default: 0.7)
+  - Use for: General conversations, explanations
+  - Example: "Explain how React hooks work"
+
+- **0.8 - 1.0**: Creative and varied
+  - Use for: Brainstorming, creative writing, exploring options
+  - Example: "Suggest creative solutions for this problem"
+
+**Example differences**:
+
+```
+Temperature: 0.1
+Q: Name a sorting algorithm
+A: Quicksort
+(Always gives same answer)
+
+Temperature: 0.9
+Q: Name a sorting algorithm
+A: Merge sort
+(May give different answers: Bubble sort, Heap sort, etc.)
+```
+
+<Callout type="tip">
+**Recommended**: Use 0.2 for code generation, 0.7 for general use, 0.9 for brainstorming.
+</Callout>
+
+### Max Tokens
+
+Maximum length of model responses.
+
+**Default**: Varies by model
+- GPT models: 4096 tokens default
+- Claude models: 4096 tokens default
+- Custom: Set your own limit
+
+**Token estimates**:
+- 1 token ≈ 0.75 words
+- 100 tokens ≈ 75 words
+- 1000 tokens ≈ 750 words
+- 4000 tokens ≈ 3000 words (several paragraphs)
+
+**Recommendations**:
+- **Short answers**: 256-512 tokens
+- **Normal responses**: 1024-2048 tokens
+- **Detailed explanations**: 2048-4096 tokens
+- **Long-form content**: 4096+ tokens
+
+**Cost considerations**:
+- Higher max tokens = higher potential cost
+- Model still stops at natural completion point
+- Only charged for actual tokens generated
+
+**Setting max tokens**:
+```
+Settings → Model Settings → Max Tokens
+Default: 2048
+Range: 1 - 128000 (varies by model)
+```
+
+### Top P (Nucleus Sampling)
+
+Alternative to temperature for controlling randomness.
+
+**Range**: 0.0 to 1.0
+
+**How it works**:
+- Considers only top P probability mass
+- 0.1 = consider only top 10% of likely tokens
+- 1.0 = consider all possible tokens
+
+**Typical values**:
+- **0.1**: Very focused
+- **0.5**: Moderately focused
+- **0.9**: Standard (most models default)
+- **1.0**: Maximum variability
+
+<Callout type="info">
+**Best Practice**: Use either temperature OR top_p, not both. Most users should stick with temperature.
+</Callout>
+
+### Frequency Penalty
+
+Reduces repetition of tokens based on how often they appear.
+
+**Range**: 0.0 to 2.0
+
+**Settings**:
+- **0.0**: No penalty (default)
+- **0.5**: Moderate penalty, reduces repetition
+- **1.0**: Strong penalty, avoids repetition
+- **2.0**: Maximum penalty, extreme variation
+
+**Use when**:
+- Model repeats phrases too much
+- Want more varied vocabulary
+- Generating creative content
+
+### Presence Penalty
+
+Encourages the model to talk about new topics.
+
+**Range**: 0.0 to 2.0
+
+**Settings**:
+- **0.0**: No penalty (default)
+- **0.5**: Moderate, somewhat encourages new topics
+- **1.0**: Strong, definitely introduces new topics
+- **2.0**: Maximum, forces topic diversity
+
+**Use when**:
+- Want broader coverage of a topic
+- Generating outlines or lists
+- Exploring different angles
+
+## Advanced Settings
+
+### Context Window Management
+
+Configure how much conversation history to include:
+
+**Options**:
+- **Full**: Send entire conversation (up to model limit)
+- **Smart**: Auto-compress older messages
+- **Recent**: Only recent N messages
+- **Custom**: Define your own rules
+
+**Smart compression**:
+- Summarizes older messages
+- Preserves recent detail
+- Manages token limits automatically
+- Configurable compression ratio
+
+### System Prompt Override
+
+Override default system prompts:
+
+```
+Settings → Model Settings → System Prompt
+
+Default: You are a helpful AI coding assistant...
+
+Custom: You are an expert in [domain] with focus on [specialty]...
+```
+
+**When to override**:
+- Company-specific guidelines
+- Consistent coding style
+- Domain-specific expertise
+- Output format requirements
+
+### Streaming Settings
+
+Control how responses appear:
+
+**Streaming Enabled** (default):
+- See responses as they're generated
+- Can stop generation early
+- Better UX for long responses
+
+**Streaming Disabled**:
+- Wait for complete response
+- All or nothing
+- Useful for automated workflows
+
+### Retry Configuration
+
+Configure retry behavior for failed requests:
+
+**Max Retries**: 3 (default)
+**Retry Delay**: 1000ms (default)
+**Backoff Strategy**: Exponential
+
+**Retry scenarios**:
+- Network timeouts
+- Rate limit errors
+- Temporary provider issues
+
+## Model Selection Guidelines
+
+### By Task Type
+
+**Code Generation**
+- Primary: Qwen 3 Coder, Claude 4.5 Sonnet
+- Alternative: GPT-4.1, Codestral
+
+**Code Review**
+- Primary: Claude 4.5 Sonnet, GPT-4.1
+- Alternative: Claude 4.5 Opus (thorough)
+
+**Debugging**
+- Primary: Claude 4.5 Sonnet
+- Alternative: GPT-4.1
+
+**Documentation Writing**
+- Primary: GPT-4.1, Claude 4.5 Sonnet
+- Alternative: Gemini 2.5 Pro
+
+**Quick Questions**
+- Primary: Claude Haiku, GPT-4.1 Turbo
+- Alternative: Gemini Flash
+
+**Complex Problem Solving**
+- Primary: Claude 4.5 Opus, GPT-5
+- Alternative: Claude 4.5 Sonnet
+
+### By Language/Framework
+
+**JavaScript/TypeScript**
+- Best: GPT-4.1, Qwen 3 Coder
+- Good: Claude 4.5 Sonnet
+
+**Python**
+- Best: GPT-4.1, Claude 4.5 Sonnet
+- Good: Qwen 3 Coder
+
+**Rust/Go**
+- Best: Claude 4.5 Sonnet, GPT-4.1
+- Good: Qwen 3 Coder
+
+**React/Vue**
+- Best: GPT-4.1, Qwen 3 Coder
+- Good: Claude 4.5 Sonnet
+
+### By Budget
+
+**Free Tier**
+- DeepSeek Chat
+- GLM 4.5 Air
+- Ollama (local)
+- Google Gemini Flash
+
+**Budget ($)**
+- Claude Haiku
+- GPT-4.1 Turbo (via OpenRouter)
+- Qwen models
+
+**Premium ($$-$$$)**
+- GPT-4.1
+- Claude 4.5 Sonnet/Opus
+- Gemini 2.5 Pro
+
+## Troubleshooting
+
+### Model Not Available
+
+**Causes**:
+- No API key for that provider
+- Model not in your plan tier
+- Regional restrictions
+
+**Solutions**:
+- Add provider API key
+- Check account tier
+- Use alternative model
+
+### Responses Cut Off
+
+**Issue**: Responses end mid-sentence
+
+**Solutions**:
+- Increase max tokens
+- Use model with larger output limit
+- Break request into smaller parts
+
+### Poor Quality Responses
+
+**Try**:
+- Switch to better model
+- Adjust temperature (lower for code)
+- Provide more context
+- Use more specific prompts
+
+### High Costs
+
+**Reduce costs**:
+- Use cheaper models for simple tasks
+- Lower max tokens default
+- Enable message compression
+- Use local models for basic tasks
+
+## Next Steps
+
+- [API Keys](/docs/configuration/api-keys) - Configure provider access
+- [Agent Configuration](/docs/configuration/agent-configuration) - Set model per agent
+- [AI Chat](/docs/features/ai-chat) - Use models in conversations
+
+<Callout type="success">
+Experiment with different models and settings to find the optimal configuration for your workflow!
+</Callout>

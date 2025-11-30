@@ -1,0 +1,56 @@
+/**
+ * Centralized documentation links configuration
+ * All external documentation URLs should be defined here for easy management
+ */
+
+const BASE_URL = 'https://talkcody.com/docs';
+
+export const DOC_LINKS = {
+  // Features
+  features: {
+    tools: `${BASE_URL}/features/tools`,
+    skills: `${BASE_URL}/features/skills`,
+    agents: `${BASE_URL}/features/ai-agents`,
+    mcpServers: `${BASE_URL}/features/mcp-servers`,
+  },
+
+  // Configuration
+  configuration: {
+    apiKeys: `${BASE_URL}/configuration/api-keys`,
+    modelSettings: `${BASE_URL}/configuration/model-settings`,
+    generalSettings: `${BASE_URL}/configuration/general-settings`,
+    editorSettings: `${BASE_URL}/configuration/editor-settings`,
+    agentConfiguration: `${BASE_URL}/configuration/agent-configuration`,
+    mcpConfiguration: `${BASE_URL}/configuration/mcp-configuration`,
+  },
+
+  // API Keys Provider Documentation
+  apiKeysProviders: {
+    aiGateway: `${BASE_URL}/configuration/api-keys#vercel-ai-gateway`,
+    openRouter: `${BASE_URL}/configuration/api-keys#openrouter`,
+    openai: `${BASE_URL}/configuration/api-keys#openai`,
+    MiniMax: `${BASE_URL}/configuration/api-keys#minimax`,
+    zhipu: `${BASE_URL}/configuration/api-keys#zhipu-ai`,
+    anthropic: `${BASE_URL}/configuration/api-keys#anthropic`,
+    google: `${BASE_URL}/configuration/api-keys#google-ai`,
+    ollama: `${BASE_URL}/configuration/api-keys#ollama`,
+    tavily: `${BASE_URL}/configuration/api-keys#tavily`,
+    elevenlabs: `${BASE_URL}/configuration/api-keys#eleven-labs`,
+  },
+
+  // Introduction
+  introduction: {
+    quickStart: `${BASE_URL}/introduction/quick-start`,
+    clientDownloads: `${BASE_URL}/introduction/client-downloads`,
+    faq: `${BASE_URL}/introduction/faq`,
+  },
+
+  // Open Source
+  openSource: {
+    architecture: `${BASE_URL}/open-source/architecture`,
+    developmentSetup: `${BASE_URL}/open-source/development-setup`,
+  },
+} as const;
+
+// Type helper for doc link paths
+export type DocLinkPath = keyof typeof DOC_LINKS;

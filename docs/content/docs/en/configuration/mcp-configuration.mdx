@@ -1,0 +1,705 @@
+---
+title: MCP Configuration
+description: Configure Model Context Protocol servers and tools
+icon: Plug
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# MCP Server Configuration
+
+Advanced configuration for Model Context Protocol (MCP) servers in TalkCody.
+
+## Overview
+
+MCP configuration enables:
+- Custom tool integration
+- External service connections
+- Advanced server settings
+- Security and access control
+- Performance optimization
+
+## Server Types Configuration
+
+### Stdio Servers
+
+Local processes communicating via standard input/output.
+
+**Basic Configuration**:
+```json
+{
+  "name": "my-server",
+  "type": "stdio",
+  "command": "node",
+  "args": ["/path/to/server.js"],
+  "env": {
+    "API_KEY": "your-key"
+  }
+}
+```
+
+**Advanced Options**:
+```json
+{
+  "name": "advanced-stdio",
+  "type": "stdio",
+  "command": "python",
+  "args": ["-m", "my_mcp_server"],
+  "cwd": "/path/to/working/directory",
+  "env": {
+    "DEBUG": "true",
+    "LOG_LEVEL": "info"
+  },
+  "timeout": 30000,
+  "autoRestart": true,
+  "maxRestarts": 3
+}
+```
+
+**Parameters**:
+- `command`: Executable to run
+- `args`: Command-line arguments
+- `cwd`: Working directory (optional)
+- `env`: Environment variables
+- `timeout`: Process timeout in ms
+- `autoRestart`: Auto-restart on crash
+- `maxRestarts`: Max restart attempts
+
+### SSE Servers
+
+Server-Sent Events for streaming updates.
+
+**Basic Configuration**:
+```json
+{
+  "name": "sse-server",
+  "type": "sse",
+  "url": "http://localhost:3000/sse",
+  "headers": {
+    "Authorization": "Bearer token"
+  }
+}
+```
+
+**Advanced Options**:
+```json
+{
+  "name": "advanced-sse",
+  "type": "sse",
+  "url": "https://api.example.com/mcp/stream",
+  "headers": {
+    "Authorization": "Bearer ${MCP_TOKEN}",
+    "X-Client-ID": "talkcody"
+  },
+  "reconnect": true,
+  "reconnectDelay": 5000,
+  "maxReconnects": 10,
+  "timeout": 60000
+}
+```
+
+**Parameters**:
+- `url`: SSE endpoint URL
+- `headers`: HTTP headers
+- `reconnect`: Auto-reconnect on disconnect
+- `reconnectDelay`: Delay between reconnects (ms)
+- `maxReconnects`: Max reconnection attempts
+- `timeout`: Connection timeout
+
+### HTTP Servers
+
+Standard HTTP-based MCP servers.
+
+**Basic Configuration**:
+```json
+{
+  "name": "http-server",
+  "type": "http",
+  "url": "https://api.example.com/mcp",
+  "headers": {
+    "Authorization": "Bearer token"
+  }
+}
+```
+
+**Advanced Options**:
+```json
+{
+  "name": "advanced-http",
+  "type": "http",
+  "url": "https://mcp.example.com",
+  "headers": {
+    "Authorization": "Bearer ${TOKEN}",
+    "Content-Type": "application/json",
+    "X-API-Version": "2024-01"
+  },
+  "timeout": 30000,
+  "retries": 3,
+  "retryDelay": 1000,
+  "validateCertificate": true,
+  "proxy": "http://proxy.company.com:8080"
+}
+```
+
+**Parameters**:
+- `url`: Server base URL
+- `headers`: Request headers
+- `timeout`: Request timeout (ms)
+- `retries`: Number of retry attempts
+- `retryDelay`: Delay between retries
+- `validateCertificate`: SSL verification
+- `proxy`: HTTP proxy URL
+
+## Server Settings
+
+### Connection Management
+
+**Connection Pooling**
+```json
+{
+  "connectionPool": {
+    "maxConnections": 5,
+    "maxIdleTime": 60000,
+    "keepAlive": true
+  }
+}
+```
+
+**Timeouts**
+```json
+{
+  "timeouts": {
+    "connect": 5000,
+    "read": 30000,
+    "write": 10000,
+    "idle": 120000
+  }
+}
+```
+
+**Retry Strategy**
+```json
+{
+  "retry": {
+    "maxAttempts": 3,
+    "initialDelay": 1000,
+    "maxDelay": 10000,
+    "backoffMultiplier": 2,
+    "retryableErrors": ["ETIMEDOUT", "ECONNRESET"]
+  }
+}
+```
+
+### Security Configuration
+
+**Authentication**
+```json
+{
+  "auth": {
+    "type": "bearer",
+    "token": "${MCP_AUTH_TOKEN}"
+  }
+}
+```
+
+**OAuth2**
+```json
+{
+  "auth": {
+    "type": "oauth2",
+    "clientId": "${OAUTH_CLIENT_ID}",
+    "clientSecret": "${OAUTH_CLIENT_SECRET}",
+    "tokenUrl": "https://auth.example.com/token",
+    "scopes": ["mcp:read", "mcp:write"]
+  }
+}
+```
+
+**API Key**
+```json
+{
+  "auth": {
+    "type": "apiKey",
+    "header": "X-API-Key",
+    "value": "${API_KEY}"
+  }
+}
+```
+
+**TLS/SSL**
+```json
+{
+  "tls": {
+    "enabled": true,
+    "rejectUnauthorized": true,
+    "ca": "/path/to/ca-cert.pem",
+    "cert": "/path/to/client-cert.pem",
+    "key": "/path/to/client-key.pem"
+  }
+}
+```
+
+### Tool Configuration
+
+**Tool Permissions**
+```json
+{
+  "tools": {
+    "enabled": ["tool1", "tool2"],
+    "disabled": ["dangerous_tool"],
+    "confirmRequired": ["file_delete", "bash_execute"]
+  }
+}
+```
+
+**Tool Timeouts**
+```json
+{
+  "toolTimeouts": {
+    "default": 10000,
+    "custom": {
+      "long_running_tool": 60000,
+      "quick_tool": 2000
+    }
+  }
+}
+```
+
+**Tool Limits**
+```json
+{
+  "toolLimits": {
+    "maxConcurrent": 3,
+    "maxPerMinute": 30,
+    "maxResultSize": 1048576
+  }
+}
+```
+
+## Environment Variables
+
+### Using Variables
+
+Reference environment variables in configuration:
+
+```json
+{
+  "env": {
+    "API_KEY": "${MCP_API_KEY}",
+    "DATABASE_URL": "${DB_CONNECTION}",
+    "DEBUG": "${MCP_DEBUG:-false}"
+  }
+}
+```
+
+**Syntax**:
+- `${VAR}`: Required variable
+- `${VAR:-default}`: Optional with default
+- `${VAR:?error message}`: Required with error
+
+### Setting Variables
+
+**macOS/Linux**:
+```bash
+# In ~/.bashrc or ~/.zshrc
+export MCP_API_KEY="your-key"
+export MCP_DEBUG="true"
+```
+
+**Windows**:
+```powershell
+# System Environment Variables
+[Environment]::SetEnvironmentVariable("MCP_API_KEY", "your-key", "User")
+```
+
+**In TalkCody**:
+```
+Settings → MCP Servers → Environment Variables
+Add variables directly in UI
+```
+
+<Callout type="warn">
+**Security**: Never commit API keys or secrets to configuration files. Always use environment variables.
+</Callout>
+
+## Server Discovery
+
+### Auto-Discovery
+
+TalkCody can automatically discover MCP servers:
+
+**Configuration Locations**:
+```
+~/.config/talkcody/mcp-servers/
+./mcp-servers/
+/etc/talkcody/mcp-servers/
+```
+
+**Discovery Process**:
+1. Scan configuration directories
+2. Read JSON configuration files
+3. Validate server configs
+4. Auto-register valid servers
+
+**Naming Convention**:
+```
+~/.config/talkcody/mcp-servers/
+├── github.json
+├── filesystem.json
+├── postgres.json
+└── custom-tool.json
+```
+
+### Manual Registration
+
+Register servers manually:
+
+1. Settings → MCP Servers
+2. Click **+ Add Server**
+3. Choose configuration method:
+   - **JSON**: Paste configuration
+   - **Form**: Fill in fields
+   - **Import**: Load from file
+
+## Performance Optimization
+
+### Caching
+
+**Response Caching**
+```json
+{
+  "cache": {
+    "enabled": true,
+    "ttl": 300000,
+    "maxSize": 100,
+    "strategy": "lru"
+  }
+}
+```
+
+**Tool Result Caching**
+```json
+{
+  "toolCache": {
+    "enabled": true,
+    "ttl": 60000,
+    "tools": ["slow_search", "api_lookup"]
+  }
+}
+```
+
+### Connection Optimization
+
+**Keep-Alive**
+```json
+{
+  "keepAlive": true,
+  "keepAliveTimeout": 60000,
+  "maxSockets": 5
+}
+```
+
+**Request Batching**
+```json
+{
+  "batching": {
+    "enabled": true,
+    "maxBatchSize": 10,
+    "batchDelay": 100
+  }
+}
+```
+
+### Resource Limits
+
+**Memory Limits**
+```json
+{
+  "limits": {
+    "maxMemory": "512MB",
+    "maxResponseSize": "10MB",
+    "maxConcurrentRequests": 5
+  }
+}
+```
+
+## Monitoring and Logging
+
+### Logging Configuration
+
+**Log Levels**
+```json
+{
+  "logging": {
+    "level": "info",
+    "file": "/var/log/talkcody/mcp.log",
+    "maxSize": "10MB",
+    "maxFiles": 5,
+    "format": "json"
+  }
+}
+```
+
+**Log Levels**:
+- `error`: Errors only
+- `warn`: Warnings and errors
+- `info`: General information (default)
+- `debug`: Detailed debugging
+- `trace`: Very verbose
+
+**Custom Logging**
+```json
+{
+  "logging": {
+    "level": "debug",
+    "transports": [
+      {
+        "type": "file",
+        "path": "/var/log/mcp.log"
+      },
+      {
+        "type": "console",
+        "colorize": true
+      }
+    ]
+  }
+}
+```
+
+### Metrics
+
+**Enable Metrics**
+```json
+{
+  "metrics": {
+    "enabled": true,
+    "port": 9090,
+    "path": "/metrics",
+    "format": "prometheus"
+  }
+}
+```
+
+**Tracked Metrics**:
+- Request count
+- Response times
+- Error rates
+- Tool usage
+- Connection pool stats
+
+### Health Checks
+
+**Configuration**
+```json
+{
+  "healthCheck": {
+    "enabled": true,
+    "interval": 30000,
+    "timeout": 5000,
+    "endpoint": "/health"
+  }
+}
+```
+
+**Health Check Response**:
+```json
+{
+  "status": "healthy",
+  "uptime": 86400,
+  "toolsAvailable": 15,
+  "lastError": null,
+  "metrics": {
+    "requestCount": 1234,
+    "avgResponseTime": 150
+  }
+}
+```
+
+## Server Management
+
+### Lifecycle Management
+
+**Auto-Start**
+```json
+{
+  "lifecycle": {
+    "autoStart": true,
+    "startDelay": 1000,
+    "startupTimeout": 30000
+  }
+}
+```
+
+**Graceful Shutdown**
+```json
+{
+  "lifecycle": {
+    "shutdownTimeout": 10000,
+    "drainRequests": true,
+    "closeConnections": true
+  }
+}
+```
+
+**Restart Policies**
+```json
+{
+  "restart": {
+    "policy": "on-failure",
+    "maxRetries": 3,
+    "backoffDelay": 5000
+  }
+}
+```
+
+### Version Management
+
+**Version Checking**
+```json
+{
+  "version": {
+    "checkOnStart": true,
+    "autoUpdate": false,
+    "channel": "stable"
+  }
+}
+```
+
+**Compatibility**
+```json
+{
+  "compatibility": {
+    "minMcpVersion": "1.0.0",
+    "maxMcpVersion": "2.0.0"
+  }
+}
+```
+
+## Troubleshooting Configuration
+
+### Debug Mode
+
+Enable detailed logging:
+
+```json
+{
+  "debug": {
+    "enabled": true,
+    "logRequests": true,
+    "logResponses": true,
+    "logErrors": true,
+    "verbose": true
+  }
+}
+```
+
+### Validation
+
+**Schema Validation**
+```json
+{
+  "validation": {
+    "strict": true,
+    "validateSchemas": true,
+    "allowAdditionalProperties": false
+  }
+}
+```
+
+**Test Configuration**
+```bash
+# CLI command to validate config
+talkcody mcp validate /path/to/config.json
+
+# Test server connection
+talkcody mcp test my-server
+```
+
+### Common Issues
+
+**Server Won't Start**
+```json
+{
+  "troubleshooting": {
+    "checkPath": true,
+    "verifyPermissions": true,
+    "testConnection": true,
+    "validateConfig": true
+  }
+}
+```
+
+**Connection Timeouts**
+- Increase timeout values
+- Check network connectivity
+- Verify firewall settings
+- Test with curl/wget
+
+**Authentication Failures**
+- Verify credentials
+- Check token expiration
+- Validate environment variables
+- Review auth configuration
+
+## Best Practices
+
+### Configuration Organization
+
+**Separate Configs by Environment**
+```
+config/
+├── mcp-servers.production.json
+├── mcp-servers.development.json
+└── mcp-servers.local.json
+```
+
+**Use Includes**
+```json
+{
+  "includes": [
+    "./common-config.json",
+    "./auth-config.json"
+  ],
+  "servers": [...]
+}
+```
+
+### Security Best Practices
+
+1. **Never hardcode secrets**
+   - Use environment variables
+   - Use secret management systems
+   - Rotate credentials regularly
+
+2. **Principle of least privilege**
+   - Grant minimal permissions
+   - Restrict network access
+   - Limit tool availability
+
+3. **Validate inputs**
+   - Enable strict validation
+   - Check tool parameters
+   - Sanitize user inputs
+
+4. **Monitor access**
+   - Enable logging
+   - Track tool usage
+   - Alert on anomalies
+
+### Performance Best Practices
+
+1. **Enable caching** for expensive operations
+2. **Use connection pooling** for frequent requests
+3. **Implement timeouts** to prevent hangs
+4. **Limit concurrent requests** to avoid overload
+5. **Monitor resource usage** regularly
+
+## Next Steps
+
+- [MCP Servers](/docs/features/mcp-servers) - Using MCP servers
+- [Agent Configuration](/docs/configuration/agent-configuration) - Enable MCP for agents
+- [API Keys](/docs/configuration/api-keys) - Configure authentication
+
+<Callout type="success">
+Proper MCP configuration unlocks powerful extensibility while maintaining security and performance!
+</Callout>

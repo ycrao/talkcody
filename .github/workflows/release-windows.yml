@@ -1,0 +1,154 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*-windows'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          # Extract version from tag (e.g., v0.1.8-windows -> 0.1.8)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=${VERSION%-windows}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }} (Windows)
+          draft: false
+          prerelease: false
+          body: |
+            ## What's Changed (Windows Release)
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+
+  build-windows:
+    name: Build Windows MSI
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: x86_64-pc-windows-msvc
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build frontend
+        run: bun run build
+
+      - name: Build Tauri app
+        run: bun run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Setup Node.js for wrangler
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install wrangler
+        run: npm install -g wrangler
+
+      - name: Install jq
+        run: choco install jq -y
+
+      - name: Run release script (Windows)
+        run: |
+          $env:PLATFORM = "windows"
+          $env:ARCH = "x86_64"
+          $env:VERSION = "${{ needs.create-release.outputs.version }}"
+          $env:TAURI_SIGNING_PRIVATE_KEY = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
+          $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
+          $env:CLOUDFLARE_API_TOKEN = "${{ secrets.CLOUDFLARE_API_TOKEN }}"
+          $env:CLOUDFLARE_ACCOUNT_ID = "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          
+          # Convert Windows path to Unix path for bash
+          bash .github/scripts/release.sh
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Get MSI file path
+        id: get_msi
+        run: |
+          $msiPath = (Get-ChildItem -Path "src-tauri\target\release\bundle\msi" -Name "*.msi" | Select-Object -First 1)
+          if (-not $msiPath) {
+            Write-Error "MSI file not found"
+            exit 1
+          }
+          $msiFullPath = "src-tauri\target\release\bundle\msi\$msiPath"
+          echo "msi_path=$msiFullPath" >> $env:GITHUB_OUTPUT
+          echo "msi_name=$msiPath" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Upload MSI to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.get_msi.outputs.msi_path }}
+          asset_name: ${{ steps.get_msi.outputs.msi_name }}
+          asset_content_type: application/octet-stream
+
+      - name: Get updater bundle path
+        id: get_bundle
+        run: |
+          $bundlePath = (Get-ChildItem -Path "src-tauri\target\release\bundle\msi" -Name "*.msi.tar.gz" -not -Name "*.sig" | Select-Object -First 1)
+          if (-not $bundlePath) {
+            Write-Error "Updater bundle not found"
+            exit 1
+          }
+          $bundleFullPath = "src-tauri\target\release\bundle\msi\$bundlePath"
+          echo "bundle_path=$bundleFullPath" >> $env:GITHUB_OUTPUT
+          echo "bundle_name=$bundlePath" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Upload updater bundle to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.get_bundle.outputs.bundle_path }}
+          asset_name: ${{ steps.get_bundle.outputs.bundle_name }}
+          asset_content_type: application/gzip

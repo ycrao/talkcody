@@ -1,0 +1,162 @@
+import { getVersion } from '@tauri-apps/api/app';
+import { AlertCircle, Download, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { UpdateDialog } from '@/components/update-dialog';
+import { useUpdater } from '@/hooks/use-updater';
+import { logger } from '@/lib/logger';
+
+export function AboutSettings() {
+  const [appVersion, setAppVersion] = useState<string>('');
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [lastCheckTime, setLastCheckTime] = useState<string | null>(null);
+  const updater = useUpdater({ checkOnMount: false, periodicCheck: false });
+
+  useEffect(() => {
+    const loadVersion = async () => {
+      try {
+        const version = await getVersion();
+        setAppVersion(version);
+      } catch (error) {
+        logger.error('Failed to get app version:', error);
+      }
+    };
+
+    const loadLastCheckTime = () => {
+      const lastCheck = localStorage.getItem('last_update_check');
+      if (lastCheck) {
+        const date = new Date(Number.parseInt(lastCheck, 10));
+        setLastCheckTime(date.toLocaleString());
+      }
+    };
+
+    loadVersion();
+    loadLastCheckTime();
+  }, []);
+
+  // Update last check time when update check completes
+  useEffect(() => {
+    if (!updater.checking && lastCheckTime === null) {
+      const lastCheck = localStorage.getItem('last_update_check');
+      if (lastCheck) {
+        const date = new Date(Number.parseInt(lastCheck, 10));
+        setLastCheckTime(date.toLocaleString());
+      }
+    }
+  }, [updater.checking, lastCheckTime]);
+
+  const handleCheckForUpdate = async () => {
+    await updater.checkForUpdate();
+
+    // Update last check time
+    const lastCheck = localStorage.getItem('last_update_check');
+    if (lastCheck) {
+      const date = new Date(Number.parseInt(lastCheck, 10));
+      setLastCheckTime(date.toLocaleString());
+    }
+
+    if (updater.available) {
+      setUpdateDialogOpen(true);
+    } else if (!updater.error) {
+      toast.success('You are up to date!', {
+        description: 'You are running the latest version of TalkCody.',
+      });
+    }
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">About TalkCody</CardTitle>
+          <CardDescription>Application information and updates</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Version Information */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm text-muted-foreground">Version</span>
+              <span className="text-sm font-medium">{appVersion || 'Loading...'}</span>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm text-muted-foreground">Platform</span>
+              <span className="text-sm font-medium">macOS</span>
+            </div>
+          </div>
+
+          {/* Update Section */}
+          <div className="space-y-4 border-t pt-4">
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Software Updates</h4>
+              <p className="text-xs text-muted-foreground">
+                TalkCody automatically checks for updates daily. You can also manually check for
+                updates.
+              </p>
+            </div>
+
+            {lastCheckTime && (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Last checked:</span>
+                <span>{lastCheckTime}</span>
+              </div>
+            )}
+
+            <Button
+              onClick={handleCheckForUpdate}
+              disabled={updater.checking}
+              variant="outline"
+              className="w-full"
+            >
+              {updater.checking ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Checking for Updates...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Check for Updates
+                </>
+              )}
+            </Button>
+
+            {updater.error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-xs">{updater.error}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          {/* Links */}
+          <div className="space-y-2 border-t pt-4">
+            <h4 className="text-sm font-medium">Resources</h4>
+            <div className="space-y-1">
+              <a
+                href="https://github.com/talkcody/talkcody"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-xs text-muted-foreground hover:text-primary"
+              >
+                GitHub Repository
+              </a>
+              <a
+                href="https://talkcody.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-xs text-muted-foreground hover:text-primary"
+              >
+                Website
+              </a>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <UpdateDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} updater={updater} />
+    </>
+  );
+}

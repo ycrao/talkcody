@@ -1,0 +1,616 @@
+---
+title: Editor Settings
+description: Configure the integrated code editor
+icon: FileEdit
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Editor Settings
+
+Configure TalkCody's integrated Monaco code editor to match your preferences and workflow.
+
+## Overview
+
+The editor settings control:
+- Appearance and theme
+- Behavior and editing features
+- AI completions integration
+- File handling
+- Keyboard shortcuts
+
+## Appearance
+
+### Theme
+
+**Editor Theme Options**:
+- **VS Dark** (default): Classic dark theme
+- **VS Light**: Light theme for bright environments
+- **High Contrast Dark**: Enhanced contrast for accessibility
+- **High Contrast Light**: Light high contrast
+- **Custom**: Import VS Code themes
+
+**Setting theme**:
+```
+Settings → Editor → Theme
+Select from dropdown
+```
+
+**Sync with System**:
+```
+☑ Follow system theme
+```
+Automatically switches between light/dark based on OS settings.
+
+### Font Configuration
+
+**Font Family**
+```
+Default: 'Monaco', 'Menlo', 'Courier New', monospace
+Custom: 'JetBrains Mono', 'Fira Code', 'Source Code Pro'
+```
+
+**Font Size**
+```
+Default: 14px
+Range: 8px - 40px
+Recommended: 12px - 16px
+```
+
+**Font Weight**
+```
+Default: normal
+Options: light, normal, bold
+```
+
+**Line Height**
+```
+Default: 1.5
+Range: 1.0 - 3.0
+Recommended: 1.4 - 1.6
+```
+
+**Font Ligatures**
+```
+☑ Enable font ligatures
+```
+Shows special characters for `=>`, `!=`, `===`, etc.
+
+### Layout
+
+**Line Numbers**
+```
+Options:
+○ On (default)
+○ Off
+○ Relative
+○ Interval
+```
+
+**Minimap**
+```
+☑ Show minimap
+Position: Right side
+Size: Proportional / Fill / Fit
+```
+
+**Ruler**
+```
+Column rulers: [80, 120]
+Shows vertical lines at specified columns
+```
+
+**Whitespace**
+```
+Options:
+○ None
+● Selection
+○ Trailing
+○ All
+```
+
+## Editor Behavior
+
+### Editing Features
+
+**Auto Save**
+```
+Mode:
+○ Off
+● On Focus Change (default)
+○ On Window Change
+○ After Delay
+
+Delay: 1000ms
+```
+
+**Auto Format**
+```
+☑ Format on save
+☑ Format on paste
+☑ Format on type
+```
+
+**Word Wrap**
+```
+Options:
+○ Off
+● On (default)
+○ Word Bound
+○ Bounded
+
+Wrap Column: 80
+```
+
+**Tab Settings**
+```
+Tab Size: 2
+☑ Insert Spaces (vs tabs)
+☑ Detect Indentation
+```
+
+### Smart Features
+
+**Bracket Matching**
+```
+☑ Match brackets
+☑ Auto close brackets
+☑ Auto close quotes
+☑ Auto close tags (HTML/JSX)
+```
+
+**Auto Suggestions**
+```
+☑ Show suggestions
+Trigger: typing / manual
+Delay: 300ms
+
+☑ Suggest on trigger characters
+☑ Accept suggestions on Enter
+☑ Accept suggestions on Tab
+```
+
+**Snippets**
+```
+☑ Enable snippets
+☑ Show snippet suggestions
+☑ Tab completion for snippets
+```
+
+**IntelliSense**
+```
+☑ Enable IntelliSense
+☑ Quick suggestions
+☑ Parameter hints
+☑ Suggest selection
+```
+
+### Navigation
+
+**Go to Definition**
+```
+Modifier: Cmd (Mac) / Ctrl (Windows/Linux)
+Click: Cmd + Click to jump to definition
+```
+
+**Find and Replace**
+```
+☑ Case sensitive toggle
+☑ Whole word toggle
+☑ Regex toggle
+☑ Preserve case in replace
+```
+
+**Multi-Cursor**
+```
+Add cursor: Cmd/Ctrl + Click
+Column selection: Shift + Alt + Drag
+```
+
+## AI Features
+
+### Code Completions
+
+**Enable AI Completions**
+```
+☑ Enable AI-powered completions
+```
+
+**Trigger Mode**
+```
+Options:
+● Automatic
+○ Manual only (Cmd/Ctrl + Space)
+○ Hybrid
+```
+
+**Completion Settings**
+```
+Trigger delay: 500ms
+Max tokens: 100
+Show inline: Yes
+Model: [Select model]
+```
+
+**Acceptance**
+```
+Accept keys:
+☑ Tab
+☑ Enter
+☐ Space
+
+Accept word by word: Cmd/Ctrl + →
+```
+
+### AI Assistance
+
+**Inline AI**
+```
+☑ Enable inline AI actions
+Actions:
+  - Explain code
+  - Improve code
+  - Generate tests
+  - Add comments
+  - Fix errors
+```
+
+**Code Actions**
+```
+☑ AI-powered quick fixes
+☑ AI refactoring suggestions
+☑ AI optimization hints
+```
+
+## File Handling
+
+### File Association
+
+**Language Detection**
+```
+☑ Auto-detect language from extension
+☑ Auto-detect from file content
+☑ Use .editorconfig if present
+```
+
+**Custom Associations**
+```
+.jsx → JavaScript React
+.tsx → TypeScript React
+.mdx → Markdown
+.conf → Config file
+```
+
+### Encoding
+
+**Default Encoding**
+```
+UTF-8 (recommended)
+
+Options:
+- UTF-8
+- UTF-16
+- ASCII
+- ISO-8859-1
+```
+
+**End of Line**
+```
+Options:
+● Auto-detect (default)
+○ LF (\n) - Unix/macOS
+○ CRLF (\r\n) - Windows
+```
+
+### File Watching
+
+**Auto Reload**
+```
+☑ Reload files changed externally
+☑ Show confirmation for large files
+Threshold: 10MB
+```
+
+## Keyboard Shortcuts
+
+### Default Shortcuts
+
+| Action | Mac | Windows/Linux |
+|--------|-----|---------------|
+| Save | `Cmd + S` | `Ctrl + S` |
+| Find | `Cmd + F` | `Ctrl + F` |
+| Replace | `Cmd + H` | `Ctrl + H` |
+| Go to Line | `Cmd + G` | `Ctrl + G` |
+| Command Palette | `Cmd + Shift + P` | `Ctrl + Shift + P` |
+| Format Document | `Shift + Alt + F` | `Shift + Alt + F` |
+| Comment Line | `Cmd + /` | `Ctrl + /` |
+| Duplicate Line | `Shift + Alt + ↓` | `Shift + Alt + ↓` |
+| Delete Line | `Cmd + Shift + K` | `Ctrl + Shift + K` |
+
+### Custom Shortcuts
+
+**Customization**
+```
+Settings → Editor → Keyboard Shortcuts
+Click on action to rebind
+```
+
+**Import from VS Code**
+```
+☑ Import VS Code keybindings
+File: keybindings.json
+```
+
+## Advanced Settings
+
+### Performance
+
+**Large Files**
+```
+Large file threshold: 5MB
+
+For large files:
+☐ Disable syntax highlighting
+☐ Disable code folding
+☐ Disable minimap
+☑ Limit line count display
+```
+
+**Rendering**
+```
+☑ Hardware acceleration
+☑ Smooth scrolling
+Font rendering: Auto / Antialiased / None
+```
+
+### Accessibility
+
+**Screen Reader**
+```
+☑ Optimize for screen readers
+☑ Read editor content
+☑ Announce line numbers
+```
+
+**High Contrast**
+```
+☑ Use high contrast theme
+☑ Increase cursor width
+☑ Bold text
+```
+
+**Keyboard Navigation**
+```
+☑ Navigate with keyboard only
+☑ Tab traps in editor
+Focus indicators: Enhanced
+```
+
+### Extension Integration
+
+**EditorConfig**
+```
+☑ Enable EditorConfig support
+Reads .editorconfig files for project-specific settings
+```
+
+**Prettier**
+```
+☑ Use Prettier for formatting
+Config: .prettierrc
+```
+
+**ESLint**
+```
+☑ Show ESLint warnings
+☑ Auto-fix on save
+```
+
+## Language-Specific Settings
+
+### JavaScript/TypeScript
+
+**Type Checking**
+```
+☑ Enable type checking
+☑ Show inline type hints
+☑ Suggest imports
+```
+
+**JSX**
+```
+☑ Auto-close JSX tags
+☑ Format JSX attributes
+☑ Emmet in JSX
+```
+
+### Python
+
+**Formatting**
+```
+Formatter: Black / autopep8
+Line length: 88
+☑ Format on save
+```
+
+**Linting**
+```
+Linter: Pylint / Flake8
+☑ Show warnings
+☑ Show errors
+```
+
+### Markdown
+
+**Preview**
+```
+☑ Show preview on side
+☑ Sync scroll
+☑ Render code blocks
+```
+
+**Formatting**
+```
+☑ Auto-format tables
+☑ Auto-list continuation
+☑ Wrap at column 80
+```
+
+### Other Languages
+
+Configure per-language settings:
+```
+Settings → Editor → Language Specific
+
+Select language → Configure:
+- Tab size
+- Formatting
+- Linting
+- File associations
+```
+
+## Workspace Settings
+
+### Project-Level Config
+
+**Per-project settings**:
+```
+.talkcody/
+  └── editor.json
+```
+
+**Example**:
+```json
+{
+  "editor.tabSize": 4,
+  "editor.formatOnSave": true,
+  "editor.rulers": [80, 120],
+  "editor.fontFamily": "JetBrains Mono"
+}
+```
+
+**Priority**:
+1. Workspace settings
+2. User settings
+3. Default settings
+
+### Team Settings
+
+**Share with team**:
+```
+.talkcody/
+  └── editor.shared.json
+```
+
+Commit to version control for team consistency.
+
+## Importing Settings
+
+### From VS Code
+
+**Import VS Code Settings**:
+```
+Settings → Editor → Import Settings
+Select: VS Code settings.json
+```
+
+**Automatic sync**:
+```
+☑ Sync with VS Code settings
+Path: ~/Library/Application Support/Code/User/settings.json
+```
+
+### From Other Editors
+
+**Import from**:
+- Sublime Text
+- Atom
+- JetBrains IDEs
+- Vim/Neovim
+
+```
+Settings → Editor → Import
+Choose source editor
+Select settings file
+```
+
+## Troubleshooting
+
+### Performance Issues
+
+**Solutions**:
+- Disable syntax highlighting for large files
+- Turn off minimap
+- Reduce font size
+- Disable AI completions in large files
+- Close unused files
+
+### Font Not Appearing
+
+**Check**:
+- Font is installed on system
+- Font name is correct (case-sensitive)
+- Font supports ligatures (if enabled)
+- Restart TalkCody after installing fonts
+
+### Shortcuts Not Working
+
+**Debug**:
+- Check for conflicts with system shortcuts
+- Verify keyboard layout
+- Reset to defaults
+- Import fresh keybindings
+
+### Auto-Save Not Working
+
+**Verify**:
+- Auto-save is enabled
+- File permissions allow writes
+- File isn't open in another app
+- Sufficient disk space
+
+## Best Practices
+
+### Recommended Settings for Coding
+
+**General**:
+```
+Font: JetBrains Mono 14px
+Tab Size: 2 spaces
+Word Wrap: On
+Auto Save: On Focus Change
+Format on Save: Yes
+```
+
+**AI Features**:
+```
+Completions: Automatic (500ms delay)
+Model: Claude Haiku / Qwen Coder
+Max Tokens: 100
+Inline suggestions: Yes
+```
+
+**Performance**:
+```
+Minimap: Off for large files
+Hardware Acceleration: On
+Smooth Scrolling: On
+```
+
+### Team Collaboration
+
+**Enforce consistency**:
+1. Use `.editorconfig`
+2. Share workspace settings
+3. Document required extensions
+4. Use formatters (Prettier, Black)
+
+## Next Steps
+
+- [General Settings](/docs/configuration/general-settings) - App-wide settings
+- [AI Completions](/docs/features/ai-completions) - Using AI in the editor
+- [Model Settings](/docs/configuration/model-settings) - Configure AI models
+
+<Callout type="success">
+A well-configured editor improves productivity. Experiment to find your perfect setup!
+</Callout>

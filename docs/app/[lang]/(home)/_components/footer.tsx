@@ -1,0 +1,224 @@
+import { Github} from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+
+const translations = {
+  en: {
+    description:
+      "Free and Open Source AI Coding Agent. Build faster with AI that respects your privacy and freedom.",
+    documentation: "Documentation",
+    blog: "Blog",
+    github: "GitHub",
+    resources: "Resources",
+    community: "Community",
+    quickStart: "Quick Start",
+    downloads: "Downloads",
+    api: "API Reference",
+    examples: "Examples",
+    viewOnGitHub: "View on GitHub",
+    starOnGitHub: "Star on GitHub",
+    contribute: "Contribute",
+    support: "Support",
+    features: "Features",
+    privacy: "Privacy",
+    security: "Security",
+    allRightsReserved: "All rights reserved.",
+    builtWith: "Built with",
+    and: "and",
+  },
+  zh: {
+    description: "免费开源的 AI 编码助手。使用尊重您隐私和自由的 AI 更快地构建。",
+    documentation: "文档",
+    blog: "博客",
+    github: "GitHub",
+    resources: "资源",
+    community: "社区",
+    quickStart: "快速开始",
+    downloads: "下载",
+    api: "API 参考",
+    examples: "示例",
+    viewOnGitHub: "在 GitHub 上查看",
+    starOnGitHub: "在 GitHub 上 Star",
+    contribute: "贡献",
+    support: "支持",
+    features: "功能",
+    privacy: "隐私",
+    security: "安全",
+    allRightsReserved: "保留所有权利。",
+    builtWith: "使用",
+    and: "和",
+  },
+};
+
+export function Footer({ lang }: { lang: string }) {
+  const t = translations[lang as keyof typeof translations] || translations.en;
+
+  return (
+    <footer className="mt-auto border-t bg-muted/30">
+      <div className="container py-12 lg:py-16">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-12">
+          {/* Brand section */}
+          <div className="space-y-4 lg:col-span-4">
+            <div className="flex items-center gap-2">
+              <Image
+                src="/logo.svg"
+                alt="TalkCody Logo"
+                width={24}
+                height={24}
+                className="h-6 w-auto dark:invert"
+              />
+              <h3 className="text-lg font-bold">TalkCody</h3>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {t.description}
+            </p>
+            <div className="flex items-center gap-4 pt-2">
+              <a
+                href="https://github.com/talkcody/talkcody"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Github className="h-4 w-4" />
+                <span>{t.starOnGitHub}</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Links sections */}
+          <div className="grid grid-cols-2 gap-6 lg:col-span-8 lg:grid-cols-3">
+            {/* Documentation */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                {/* <BookOpen className="h-4 w-4" /> */}
+                {t.documentation}
+              </h4>
+              <ul className="space-y-2.5 text-sm">
+                <li>
+                  <Link
+                    href={`/${lang}/docs`}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t.quickStart}
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href={`/${lang}/docs/introduction/client-downloads`}
+                    className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+                  >
+                    {/* <Download className="h-3 w-3" /> */}
+                    {t.downloads}
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href={`/${lang}/docs`}
+                    className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+                  >
+                    {/* <Code className="h-3 w-3" /> */}
+                    {t.api}
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Resources */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                {/* <FileText className="h-4 w-4" /> */}
+                {t.resources}
+              </h4>
+              <ul className="space-y-2.5 text-sm">
+                <li>
+                  <Link
+                    href={`/${lang}/blog`}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t.blog}
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href={`/${lang}/docs`}
+                    className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+                  >
+                    {/* <Zap className="h-3 w-3" /> */}
+                    {t.features}
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href={`/${lang}/docs`}
+                    className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+                  >
+                    {/* <Shield className="h-3 w-3" /> */}
+                    {t.security}
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Community */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                {/* <Star className="h-4 w-4" /> */}
+                {t.community}
+              </h4>
+              <ul className="space-y-2.5 text-sm">
+                <li>
+                  <a
+                    href="https://github.com/talkcody/talkcody"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+                  >
+                    {/* <Github className="h-3 w-3" /> */}
+                    {t.viewOnGitHub}
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://github.com/talkcody/talkcody"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t.contribute}
+                  </a>
+                </li>
+                <li>
+                  <Link
+                    href={`/${lang}/docs`}
+                    className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+                  >
+                    {/* <HelpCircle className="h-3 w-3" /> */}
+                    {t.support}
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="mt-10 pt-8 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
+          <p className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} TalkCody. {t.allRightsReserved}
+          </p>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{t.builtWith}</span>
+            <a
+              href="https://github.com/talkcody/talkcody"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground transition-colors"
+            >
+              Open Source
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}

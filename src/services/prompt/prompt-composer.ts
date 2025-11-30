@@ -1,0 +1,202 @@
+// src/services/prompt/prompt-composer.ts
+
+import { repositoryService } from '@/services/repository-service';
+import type {
+  InjectionPlacement,
+  PromptBuildOptions,
+  PromptBuildResult,
+  PromptContextProvider,
+  ResolveContext,
+} from '@/types/prompt';
+
+function collectPlaceholders(text: string): string[] {
+  const re = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
+  const tokens = new Set<string>();
+  let match: RegExpExecArray | null = re.exec(text);
+  while (match) {
+    const token = match[1];
+    if (token) {
+      tokens.add(token);
+    }
+    match = re.exec(text);
+  }
+  return Array.from(tokens);
+}
+
+function replaceAllPlaceholders(text: string, values: Record<string, string>): string {
+  return text.replace(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (m, p1) => {
+    if (p1) {
+      const v = values[p1];
+      return v !== undefined ? v : m;
+    }
+    return m;
+  });
+}
+
+function joinSections(sections: string[]): string {
+  return sections.filter(Boolean).join('\n\n---\n\n');
+}
+
+export class PromptComposer {
+  private providers: PromptContextProvider[];
+
+  constructor(providers: PromptContextProvider[]) {
+    this.providers = providers;
+  }
+
+  async compose(options: PromptBuildOptions): Promise<PromptBuildResult> {
+    const {
+      agent,
+      extraVariables,
+      workspaceRoot,
+      currentWorkingDirectory,
+      recentFilePaths,
+      conversationId,
+    } = options;
+
+    // Extract systemPrompt from agent (handle function case)
+    let baseSystem = '';
+    if (typeof agent.systemPrompt === 'string') {
+      baseSystem = agent.systemPrompt;
+    } else if (typeof agent.systemPrompt === 'function') {
+      baseSystem = await Promise.resolve(agent.systemPrompt());
+    }
+
+    const sections: string[] = [];
+    sections.push(baseSystem);
+
+    // Add rules if present
+    if (agent.rules) {
+      const rules = agent.rules
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (rules.length) {
+        sections.push(`You must follow the following rules:\n\n${rules.join('\n')}`);
+      }
+    }
+
+    // Add output format if present
+    if (agent.outputFormat) {
+      sections.push(agent.outputFormat);
+    }
+
+    let raw = joinSections(sections);
+
+    const ctx: ResolveContext = {
+      workspaceRoot,
+      currentWorkingDirectory,
+      recentFilePaths,
+      conversationId,
+      agentId: agent.id,
+      cache: new Map(),
+      readFile: (root, file) => repositoryService.readFile(root, file),
+    };
+
+    const enabledProviderIds = new Set(agent.dynamicPrompt?.providers || []);
+    const enabledProviders = this.providers.filter((p) => enabledProviderIds.has(p.id));
+
+    const explicitTokens = collectPlaceholders(raw);
+
+    // Resolve values: explicit placeholders first
+    const resolvedValues: Record<string, string> = {};
+    const unresolved = new Set<string>(explicitTokens);
+
+    const variablesSources: Array<Record<string, string> | undefined> = [
+      extraVariables,
+      agent.dynamicPrompt?.variables,
+    ];
+
+    // 1) variables override
+    for (const source of variablesSources) {
+      if (!source) continue;
+      for (const [k, v] of Object.entries(source)) {
+        if (explicitTokens.includes(k)) {
+          resolvedValues[k] = v;
+          unresolved.delete(k);
+        }
+      }
+    }
+
+    // 2) providers for remaining explicit tokens
+    for (const token of Array.from(unresolved)) {
+      for (const provider of enabledProviders) {
+        if (!provider.canResolve(token)) continue;
+        const value = await provider.resolve(token, ctx);
+        if (value !== undefined) {
+          resolvedValues[token] = value;
+          unresolved.delete(token);
+          break;
+        }
+      }
+    }
+
+    // Replace explicit placeholders
+    raw = replaceAllPlaceholders(raw, resolvedValues);
+
+    // Auto-injection: providers may inject standard section if token not explicitly used
+    if (agent.dynamicPrompt?.enabled) {
+      const autoSections: Array<{
+        placement: InjectionPlacement;
+        text: string;
+      }> = [];
+
+      for (const provider of enabledProviders) {
+        const inj = provider.injection;
+        if (!inj?.enabledByDefault) continue;
+
+        // If any of provider tokens already present explicitly in template, skip auto inject
+        const tokens = provider.providedTokens();
+        const isExplicit = tokens.some((t) => explicitTokens.includes(t));
+        if (isExplicit) continue;
+
+        // Try to resolve all tokens provider can provide and render its section
+        const tokenValues: Record<string, string> = { ...resolvedValues };
+        for (const t of tokens) {
+          if (tokenValues[t] !== undefined) continue;
+          // variable overrides for auto as well
+          if (extraVariables && extraVariables[t] !== undefined) {
+            tokenValues[t] = extraVariables[t];
+            continue;
+          }
+          if (agent.dynamicPrompt?.variables && agent.dynamicPrompt.variables[t] !== undefined) {
+            tokenValues[t] = agent.dynamicPrompt.variables[t];
+            continue;
+          }
+          const v = await provider.resolve(t, ctx);
+          if (v !== undefined) tokenValues[t] = v;
+        }
+
+        const sectionText = inj.sectionTemplate(tokenValues);
+        if (sectionText?.trim().length) {
+          autoSections.push({ placement: inj.placement, text: sectionText });
+        }
+      }
+
+      // Apply auto sections by placement
+      for (const s of autoSections) {
+        if (s.placement === 'prepend') {
+          raw = joinSections([s.text, raw]);
+        } else if (s.placement === 'append') {
+          raw = joinSections([raw, s.text]);
+        } else if (typeof s.placement === 'object' && 'anchorToken' in s.placement) {
+          const anchor = s.placement.anchorToken;
+          const anchorPattern = new RegExp(
+            `\\{\\{\\s*${anchor.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\s*\\}\\}`,
+            'g'
+          );
+          if (anchorPattern.test(raw)) {
+            raw = raw.replace(anchorPattern, s.text);
+          } else {
+            raw = joinSections([raw, s.text]);
+          }
+        }
+      }
+    }
+
+    return {
+      finalSystemPrompt: raw,
+      unresolvedPlaceholders: Array.from(unresolved),
+    };
+  }
+}

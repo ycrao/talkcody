@@ -1,0 +1,6 @@
+{
+  "title": "Features",
+  "icon": "Sparkles",
+  "defaultOpen": true,
+  "pages": ["ai-chat", "ai-agents", "tools", "skills", "mcp-servers"]
+}
