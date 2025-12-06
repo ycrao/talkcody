@@ -11,6 +11,7 @@ import { UpdateNotification } from '@/components/update-notification';
 import { UiNavigationProvider, useUiNavigation } from '@/contexts/ui-navigation';
 import { useWindowContext, WindowProvider } from '@/contexts/window-context';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
+import { useTheme } from '@/hooks/use-theme';
 import { logger } from '@/lib/logger';
 import { initializationManager } from '@/services/initialization-manager';
 import { WindowRestoreService } from '@/services/window-restore-service';
@@ -300,9 +301,16 @@ function AppContent() {
   );
 }
 
+function ThemeInitializer() {
+  // Invoke useTheme once to ensure persisted theme is applied at startup
+  useTheme();
+  return null;
+}
+
 function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      <ThemeInitializer />
       <WindowProvider>
         <RepositoryStoreProvider>
           <UiNavigationProvider>
