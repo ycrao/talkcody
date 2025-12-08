@@ -17,6 +17,7 @@ describe('CallAgentToolDoing Component', () => {
   };
 
   // Helper function to create tool-call messages in the correct format
+  // Note: Tool messages from tool-executor.ts have role: 'tool', not 'assistant'
   const createToolCallMessage = (toolName: string, toolCallId: string, input: any): UIMessage => {
     const toolContent: ToolMessageContent = {
       type: 'tool-call',
@@ -27,7 +28,7 @@ describe('CallAgentToolDoing Component', () => {
 
     return {
       id: `msg-${toolCallId}`,
-      role: 'assistant',
+      role: 'tool',
       content: [toolContent],
       timestamp: new Date(),
       toolCallId,

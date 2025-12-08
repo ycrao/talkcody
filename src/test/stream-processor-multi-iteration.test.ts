@@ -96,7 +96,7 @@ describe('StreamProcessor multi-iteration behavior', () => {
     expect(processor.getCurrentStepText()).toBe('AABB'); // Concatenated!
   });
 
-  it('should call onAssistantMessageStart even with text-start if already answering (text-start always calls)', () => {
+  it('should NOT call onAssistantMessageStart again when text-start arrives but already answering', () => {
     const callbacks = {
       onChunk: (chunk: string) => {
         onChunkCalls.push(chunk);
@@ -117,13 +117,14 @@ describe('StreamProcessor multi-iteration behavior', () => {
     // DO NOT reset state
     // processor.resetState(); // <-- commented out
 
-    // Second iteration - text-start event
+    // Second text-start event without resetState
     processor.processTextStart(callbacks);
 
-    // text-start ALWAYS calls onAssistantMessageStart regardless of isAnswering state
-    expect(onAssistantMessageStartCalls).toBe(2); // Called again!
+    // text-start should NOT call onAssistantMessageStart again when already answering
+    // This prevents duplicate message creation (e.g., when reasoning comes before text-start)
+    expect(onAssistantMessageStartCalls).toBe(1); // NOT called again!
 
-    // But currentStepText is NOT reset, so text continues to accumulate
+    // Text continues to accumulate
     processor.processTextDelta('B', callbacks);
     processor.processTextDelta('B', callbacks);
 

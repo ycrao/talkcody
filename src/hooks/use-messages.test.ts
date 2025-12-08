@@ -14,13 +14,21 @@
  */
 
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useMessages } from './use-messages';
+import { useMessagesStore } from '@/stores/messages-store';
+
+// Test conversation ID for all tests
+const TEST_CONVERSATION_ID = 'test-use-messages-hook';
 
 describe('useMessages hook', () => {
+  beforeEach(() => {
+    // Reset messages store before each test
+    useMessagesStore.getState().messagesByConversation.clear();
+  });
   describe('updateMessageById', () => {
     it('should update a specific message by ID', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let messageId: string = '';
 
@@ -44,7 +52,7 @@ describe('useMessages hook', () => {
     });
 
     it('should update streaming state correctly', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let messageId: string = '';
 
@@ -64,7 +72,7 @@ describe('useMessages hook', () => {
     });
 
     it('should update the correct message when multiple messages exist', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let firstId: string = '';
       let secondId: string = '';
@@ -94,7 +102,7 @@ describe('useMessages hook', () => {
     });
 
     it('should handle updating non-existent message ID gracefully', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       act(() => {
         result.current.addMessage('assistant', 'Existing message', false);
@@ -113,7 +121,7 @@ describe('useMessages hook', () => {
     });
 
     it('should work with empty message list', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       // Try to update in empty list
       act(() => {
@@ -127,7 +135,7 @@ describe('useMessages hook', () => {
 
   describe('Race condition fix - updateMessageById vs updateLastAssistantMessage', () => {
     it('should correctly update new message even when called immediately after addMessage', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let firstId: string = '';
       let secondId: string = '';
@@ -157,7 +165,7 @@ describe('useMessages hook', () => {
     });
 
     it('should maintain message integrity during rapid updates', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let messageId: string = '';
 
@@ -201,7 +209,7 @@ describe('useMessages hook', () => {
 
   describe('Multi-iteration scenario - the original bug', () => {
     it('should not corrupt first message when second iteration starts', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let firstAssistantId: string = '';
       let secondAssistantId: string = '';
@@ -255,7 +263,7 @@ describe('useMessages hook', () => {
     });
 
     it('should handle three iterations without message corruption', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       const messageIds: string[] = [];
 
@@ -309,7 +317,7 @@ describe('useMessages hook', () => {
 
   describe('Comparison with updateLastAssistantMessage', () => {
     it('updateLastAssistantMessage finds the last assistant message with string content', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let _firstId: string = '';
       let _secondId: string = '';
@@ -336,7 +344,7 @@ describe('useMessages hook', () => {
     });
 
     it('updateMessageById is more precise than updateLastAssistantMessage', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let firstId: string = '';
       let _secondId: string = '';
@@ -372,7 +380,7 @@ describe('useMessages hook', () => {
 
   describe('renderDoingUI property', () => {
     it('should preserve renderDoingUI when adding a tool message', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       act(() => {
         result.current.addMessage(
@@ -394,7 +402,7 @@ describe('useMessages hook', () => {
     });
 
     it('should handle renderDoingUI=false correctly', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       act(() => {
         result.current.addMessage(
@@ -416,7 +424,7 @@ describe('useMessages hook', () => {
     });
 
     it('should handle renderDoingUI=undefined (default)', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       act(() => {
         result.current.addMessage(
@@ -437,7 +445,7 @@ describe('useMessages hook', () => {
     });
 
     it('should correctly set renderDoingUI for exitPlanMode tool-call', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       // Simulate exitPlanMode tool-call message with renderDoingUI=true
       act(() => {
@@ -470,7 +478,7 @@ describe('useMessages hook', () => {
     });
 
     it('should correctly set renderDoingUI for askUserQuestions tool-call', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       act(() => {
         result.current.addMessage(
@@ -498,7 +506,7 @@ describe('useMessages hook', () => {
     });
 
     it('should preserve renderDoingUI across multiple tool messages', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       // Add tool-call with renderDoingUI=true
       act(() => {
@@ -540,7 +548,7 @@ describe('useMessages hook', () => {
 
   describe('Edge cases', () => {
     it('should handle messages with attachments', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       const attachments = [
         {
@@ -590,7 +598,7 @@ describe('useMessages hook', () => {
     });
 
     it('should preserve other message properties when updating', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let messageId: string = '';
       const assistantId = 'test-assistant';
@@ -634,7 +642,7 @@ describe('useMessages hook', () => {
     });
 
     it('should handle mixed role messages correctly', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let userId: string = '';
       let assistantId: string = '';
@@ -661,7 +669,7 @@ describe('useMessages hook', () => {
 
   describe('Integration with other useMessages functions', () => {
     it('should work correctly with deleteMessage', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let firstId: string = '';
       let secondId: string = '';
@@ -691,7 +699,7 @@ describe('useMessages hook', () => {
     });
 
     it('should work correctly with clearMessages', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let messageId: string = '';
 
@@ -714,7 +722,7 @@ describe('useMessages hook', () => {
     });
 
     it('should work correctly with stopStreaming', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       let firstId: string = '';
       let _secondId: string = '';

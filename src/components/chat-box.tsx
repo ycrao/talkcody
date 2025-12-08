@@ -17,21 +17,16 @@ import { logger } from '@/lib/logger';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
 import { agentRegistry } from '@/services/agents/agent-registry';
-import { llmService } from '@/services/agents/llm-service';
+import { type AgentLoopConfig, createLLMService } from '@/services/agents/llm-service';
 import { commandExecutor } from '@/services/commands/command-executor';
-import { ConversationManager } from '@/services/conversation-manager';
-import type {
-  Conversation as ConversationType,
-  StoredToolContent,
-} from '@/services/database/types';
 import { databaseService } from '@/services/database-service';
 import { modelService } from '@/services/model-service';
-import { notificationService } from '@/services/notification-service';
 import { previewSystemPrompt } from '@/services/prompt/preview';
 import { getValidatedWorkspaceRoot } from '@/services/workspace-root-service';
-import { useAgentExecutionStore } from '@/stores/agent-execution-store';
+import { useMessagesStore } from '@/stores/messages-store';
 import { settingsManager, useSettingsStore } from '@/stores/settings-store';
-import type { MessageAttachment, ToolMessageContent, UIMessage } from '@/types/agent';
+import { useTaskExecutionStore } from '@/stores/task-execution-store';
+import type { MessageAttachment, UIMessage } from '@/types/agent';
 import type { Command, CommandContext, CommandResult } from '@/types/command';
 import {
   Conversation,
@@ -81,195 +76,49 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
     ref
   ) => {
     const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [status, setStatus] = useState<ChatStatus>('ready');
-    const [serverStatus, setServerStatus] = useState<string>('');
     const chatInputRef = useRef<ChatInputRef>(null);
-    const [_conversation, setConversation] = useState<ConversationType | null>(null);
-    const abortControllerRef = useRef<AbortController | null>(null);
+    // Per-task abort controllers - keyed by conversationId for proper concurrent task isolation
+    const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
     const activeConversationIdRef = useRef<string | undefined>(undefined);
-    const { startExecution, stopExecution } = useAgentExecutionStore();
+    // Ref to track the currently displayed conversationId (from props) for background task UI isolation
+    const displayedConversationIdRef = useRef<string | undefined>(conversationId);
     const language = useSettingsStore((state) => state.language);
     const t = useMemo(() => getLocale((language || 'en') as SupportedLocale), [language]);
 
-    // Handle tool messages - add them to the messages list
-    const handleToolMessage = (message: UIMessage) => {
-      const isCallAgent = message.toolName === 'callAgent';
-      // Check if this is a nested tool message
-      if (message.parentToolCallId) {
-        // This is a nested tool message - update the parent tool's nestedTools array
-        logger.info(
-          `[ChatBox-Receive] 🔗 Nested tool message - will update parent${isCallAgent ? ' [CALL-AGENT]' : ''}`,
-          {
-            nestedMessageId: message.id,
-            nestedMessageRole: message.role,
-            nestedMessageToolName: message.toolName,
-            parentToolCallId: message.parentToolCallId,
-            willAddToMessages: false,
-          }
-        );
-        updateMessageWithNestedTool(message.parentToolCallId, message);
-        logger.info(
-          '[ChatBox-Receive] ✅ Parent updated with nested tool, NOT adding to messages array'
-        );
-        return; // Don't add nested messages as separate messages
-      }
+    // Derive loading state from TaskExecutionStore (instead of local state)
+    // This ensures correct state when switching between conversations
+    const isLoading = useTaskExecutionStore((state) =>
+      conversationId ? state.isTaskRunning(conversationId) : false
+    );
+    const serverStatus = useTaskExecutionStore((state) =>
+      conversationId ? (state.getExecution(conversationId)?.serverStatus ?? '') : ''
+    );
+    const status: ChatStatus = isLoading ? 'streaming' : 'ready';
 
-      // Regular tool message handling
-      if (message.role === 'tool') {
-        // Add tool result message to the messages list
-        addMessage(
-          message.role,
-          message.content,
-          false,
-          undefined,
-          undefined,
-          message.id,
-          message.toolCallId,
-          message.toolName,
-          message.nestedTools,
-          message.renderDoingUI
-        );
-        logger.info(
-          `[ChatBox-Receive] ✅ Tool message added${isCallAgent ? ' [CALL-AGENT]' : ''}`,
-          { renderDoingUI: message.renderDoingUI }
-        );
+    // Get store for actions (not reactive)
+    const taskExecutionStore = useTaskExecutionStore.getState();
 
-        // Persist tool messages to database (only for top-level tools)
-        if (activeConversationIdRef.current && message.toolCallId && message.toolName) {
-          const toolContent = Array.isArray(message.content) ? message.content[0] : null;
-
-          if (!toolContent) {
-            return;
-          }
-
-          // Handle tool-call messages (save input for later restoration)
-          if (toolContent.type === 'tool-call') {
-            const storedContent: StoredToolContent = {
-              type: 'tool-call',
-              toolCallId: (toolContent as ToolMessageContent).toolCallId,
-              toolName: (toolContent as ToolMessageContent).toolName,
-              input: (toolContent as ToolMessageContent).input as
-                | Record<string, unknown>
-                | undefined,
-            };
-
-            saveMessage(
-              activeConversationIdRef.current,
-              'tool',
-              JSON.stringify(storedContent),
-              0,
-              undefined,
-              undefined,
-              message.id
-            ).catch((error) => {
-              logger.error('Failed to save tool-call message:', error);
-            });
-            return;
-          }
-
-          // Handle tool-result messages
-          if (toolContent.type !== 'tool-result') {
-            return;
-          }
-
-          const input = (toolContent as ToolMessageContent)?.input || {};
-          const output = (toolContent as ToolMessageContent)?.output;
-          const isError =
-            output &&
-            typeof output === 'object' &&
-            (('error' in output && !!(output as { error?: unknown }).error) ||
-              ('status' in output && (output as { status?: string }).status === 'error'));
-
-          const storedContent: StoredToolContent = {
-            type: 'tool-result',
-            toolCallId: message.toolCallId,
-            toolName: message.toolName,
-            input: input as Record<string, unknown>,
-            output: output,
-            status: isError ? 'error' : 'success',
-            errorMessage:
-              isError && output && typeof output === 'object' && 'error' in output
-                ? String((output as { error?: unknown }).error)
-                : undefined,
-          };
-
-          saveMessage(
-            activeConversationIdRef.current,
-            'tool',
-            JSON.stringify(storedContent),
-            0,
-            undefined,
-            undefined,
-            message.id
-          ).catch((error) => {
-            logger.error('Failed to save tool message:', error);
-          });
-        }
-      } else if (message.role === 'assistant' && Array.isArray(message.content)) {
-        // Handle assistant messages with array content (text/reasoning)
-        // Note: tool-call messages are handled in the role='tool' branch above
-        addMessage(
-          message.role,
-          message.content,
-          false,
-          undefined,
-          undefined,
-          message.id,
-          message.toolCallId,
-          message.toolName,
-          message.nestedTools
-        );
-      } else {
-        // Regular message - only add if role is supported by addMessage
-        if (message.role !== 'system') {
-          logger.info('[ChatBox-Receive] 📥 Adding other message type', {
-            role: message.role,
-            toolName: message.toolName,
-          });
-          addMessage(
-            message.role,
-            message.content,
-            false,
-            undefined,
-            undefined,
-            message.id,
-            message.toolCallId,
-            message.toolName,
-            message.nestedTools
-          );
-          logger.info('[ChatBox-Receive] ✅ Other message type added');
-        } else {
-          logger.info('[ChatBox-Receive] ⚠️ Skipping system message');
-        }
-      }
-    };
-
-    const {
-      messages,
-      addMessage,
-      updateMessageById,
-      clearMessages,
-      setMessagesFromHistory,
-      stopStreaming,
-      deleteMessage,
-      deleteMessagesFromIndex,
-      findMessageIndex,
-      addAttachmentToMessage,
-      updateMessageWithNestedTool,
-    } = useMessages();
-
+    // useConversations first to get currentConversationId
     const {
       currentConversationId,
+      setCurrentConversationId,
       setError,
       loadConversation,
       createConversation,
       saveMessage,
-      updateMessage,
-      saveAttachment,
       clearConversation,
       getConversationDetails,
     } = useConversations(conversationId, onConversationStart);
+
+    // useMessages with conversationId for per-conversation message caching
+    const {
+      messages,
+      clearMessages,
+      stopStreaming,
+      deleteMessage,
+      deleteMessagesFromIndex,
+      findMessageIndex,
+    } = useMessages(currentConversationId);
 
     // Handle input changes
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -302,16 +151,42 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
 
     // Command registry is now initialized in InitializationManager during app startup
 
+    // Sync conversationId prop to ref for background task UI isolation
+    // This ensures isCurrentlyDisplayed() checks always use the latest prop value
+    useEffect(() => {
+      displayedConversationIdRef.current = conversationId;
+    }, [conversationId]);
+
     useEffect(() => {
       const handleConversationLoad = async () => {
-        if (conversationId && conversationId !== currentConversationId && !isLoading) {
-          await loadConversation(conversationId, 0, setMessagesFromHistory);
-          const conv = await getConversationDetails(conversationId);
-          setConversation(conv);
+        // Note: Removed !isLoading condition to allow switching conversations
+        // even when another task is running (parallel task support)
+        if (conversationId && conversationId !== currentConversationId) {
+          const taskStore = useTaskExecutionStore.getState();
+          const messagesStore = useMessagesStore.getState();
+
+          // Running task: use memory messages (preserve runtime state like renderDoingUI)
+          // Finished task: load from database
+          const isTargetTaskRunning = taskStore.isTaskRunning(conversationId);
+          const hasMessagesInMemory = messagesStore.getMessages(conversationId).length > 0;
+
+          if (isTargetTaskRunning && hasMessagesInMemory) {
+            // Running task with existing memory data, don't reload from DB
+            // This preserves runtime state like renderDoingUI for tool doing UI
+            logger.info('[ChatBox] Skipping DB load for running task with existing messages', {
+              conversationId,
+            });
+            // Still need to update currentConversationId for UI to switch
+            setCurrentConversationId(conversationId);
+          } else {
+            // Finished task or first load, fetch from database
+            await loadConversation(conversationId, 0, (loadedMessages) => {
+              messagesStore.setMessages(conversationId, loadedMessages);
+            });
+          }
         } else if (!conversationId && currentConversationId) {
           clearMessages();
           clearConversation();
-          setConversation(null);
         }
       };
 
@@ -319,13 +194,50 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
     }, [
       conversationId,
       currentConversationId,
-      isLoading,
       clearConversation,
       clearMessages,
-      getConversationDetails,
       loadConversation,
-      setMessagesFromHistory,
+      setCurrentConversationId,
     ]);
+
+    // Subscribe to execution state for streaming content sync
+    const currentExecution = useTaskExecutionStore((state) =>
+      conversationId ? state.getExecution(conversationId) : undefined
+    );
+
+    // Note: State sync effect removed - isLoading and serverStatus now derived from store
+
+    // Real-time streaming content sync from store
+    // This updates the UI when streaming content changes in the store (e.g., from background task)
+    // Note: We no longer create missing messages here - messages are always created by handleAssistantMessageStart
+    // biome-ignore lint/correctness/useExhaustiveDependencies: We intentionally use streamingContent to only re-run when streaming content changes
+    useEffect(() => {
+      if (!conversationId || !currentExecution) return;
+      if (currentExecution.status !== 'running' || !currentExecution.streamingContent) return;
+
+      // Find a streaming assistant message to update
+      // Note: The last message might be a tool message, so we search backwards
+      const messagesStoreState = useMessagesStore.getState();
+      const streamingMessage = [...messages]
+        .reverse()
+        .find((msg) => msg.role === 'assistant' && msg.isStreaming);
+
+      if (streamingMessage) {
+        // Update existing streaming message if content has changed
+        const currentContent =
+          typeof streamingMessage.content === 'string' ? streamingMessage.content : '';
+        if (currentContent !== currentExecution.streamingContent) {
+          messagesStoreState.updateMessageContent(
+            conversationId,
+            streamingMessage.id,
+            currentExecution.streamingContent,
+            true
+          );
+        }
+      }
+      // If no streaming message exists, don't create one here
+      // The task's handleAssistantMessageStart will create it
+    }, [conversationId, currentExecution?.streamingContent, messages]);
 
     const processMessage = async (
       userMessage: string,
@@ -350,10 +262,8 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
       const model = await modelService.getCurrentModel();
       logger.info(`Using model "${model}" for message processing`);
 
-      setIsLoading(true);
-      setStatus('streaming');
+      // Note: isLoading state is now derived from store - startExecution will set it
       setError(null);
-      startExecution(conversationId);
 
       onMessageSent?.(userMessage);
 
@@ -366,18 +276,22 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
           isNewConversation = true;
         } catch (error) {
           logger.error('Failed to create conversation:', error);
-          setIsLoading(false);
-          setStatus('ready');
-          stopExecution();
+          // Note: No need to reset loading state - nothing was started
           return;
         }
       }
 
       if (!activeConversationId) {
         logger.error('No conversation ID available');
-        setIsLoading(false);
-        setStatus('ready');
-        stopExecution();
+        return;
+      }
+
+      // Start task execution tracking (for parallel task support)
+      // This will set isLoading=true in the store
+      const startResult = taskExecutionStore.startExecution(activeConversationId);
+      if (!startResult.success) {
+        logger.warn('Failed to start task execution:', startResult.error);
+        toast.error(startResult.error || 'Failed to start task');
         return;
       }
 
@@ -406,12 +320,20 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
           attachments,
         };
 
-        addMessage('user', userMessage, false, agentId, attachments);
+        // Use store directly with activeConversationId (not hook's addMessage)
+        // This is necessary because the hook is bound to currentConversationId which
+        // may be undefined when creating a new conversation
+        useMessagesStore.getState().addMessage(activeConversationId, 'user', userMessage, {
+          isStreaming: false,
+          assistantId: agentId,
+          attachments,
+        });
         await saveMessage(activeConversationId, 'user', userMessage, 0, agentId, attachments);
       }
 
       const abortController = new AbortController();
-      abortControllerRef.current = abortController;
+      // Store abort controller per conversation for concurrent task support
+      abortControllersRef.current.set(activeConversationId, abortController);
 
       try {
         // Generate text response
@@ -430,9 +352,6 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
           conversationHistory.push(userChatMessage);
         }
         logger.info('conversationHistory length', conversationHistory.length);
-
-        let streamedContent = '';
-        let assistantMessageId = '';
 
         let systemPrompt = agent
           ? typeof agent.systemPrompt === 'function'
@@ -458,155 +377,45 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
         const tools = agent?.tools ?? {};
         logger.info('Using tools:', Object.keys(tools));
 
-        // Handle assistant message start - create new message for each iteration
-        const handleAssistantMessageStart = async () => {
-          // Finalize the previous message in both UI and database before creating a new one
-          if (assistantMessageId && streamedContent) {
-            // First, update UI to finalize the previous message (set isStreaming: false)
-            // This is CRITICAL to prevent the first message from "disappearing" in the UI
-            updateMessageById(assistantMessageId, streamedContent, false);
+        // Create a new LLMService instance for this task (supports parallel execution)
+        const taskLLMService = createLLMService(activeConversationId);
 
-            // Then, save to database
-            if (activeConversationId) {
-              try {
-                await updateMessage(assistantMessageId, streamedContent);
-                logger.info('Saved previous assistant message before starting new iteration');
-              } catch (error) {
-                logger.error('Failed to save previous assistant message:', error);
-              }
-            }
-          }
-
-          // Reset streamedContent when starting a new assistant message to prevent accumulation
-          streamedContent = '';
-          // Create new assistant message for this iteration
-          assistantMessageId = addMessage('assistant', '', true, agentId);
-
-          // Save initial message to database immediately with the same ID
-          if (activeConversationId) {
-            try {
-              await saveMessage(
-                activeConversationId,
-                'assistant',
-                '',
-                0,
-                agentId,
-                undefined,
-                assistantMessageId
-              );
-            } catch (error) {
-              logger.error('Failed to save initial assistant message:', error);
-            }
-          }
+        // Use the new simplified runAgentLoopWithPersist method
+        // All state updates are now handled internally via MessagesStore
+        const config: AgentLoopConfig = {
+          conversationId: activeConversationId,
+          messages: conversationHistory,
+          model,
+          systemPrompt,
+          tools,
+          isThink: true,
+          suppressReasoning: false,
+          agentId,
+          isNewConversation,
+          userMessage,
         };
 
-        await llmService.runAgentLoop(
+        await taskLLMService.runAgentLoopWithPersist(
+          config,
           {
-            messages: conversationHistory,
-            model,
-            systemPrompt,
-            tools,
-            isThink: true,
-            suppressReasoning: false,
-            agentId,
-          },
-          {
-            onChunk: (chunk: string) => {
-              if (abortController.signal.aborted) return;
-              streamedContent += chunk;
-              updateMessageById(assistantMessageId, streamedContent, true);
+            onComplete: (result) => {
+              onResponseReceived?.(result.fullText);
             },
-            onComplete: async (fullText: string) => {
-              if (abortController.signal.aborted) return;
-              // Use streamedContent instead of fullText to avoid duplication across iterations
-              // streamedContent contains only the content for the current message
-              // fullText accumulates content across all iterations which causes reasoning duplication
-              updateMessageById(assistantMessageId, streamedContent, false);
-              onResponseReceived?.(fullText);
-
-              // Update the message content in database (message was already saved in handleAssistantMessageStart)
-              // Note: We must update even if streamedContent is empty to persist the final state
-              if (activeConversationId && assistantMessageId) {
-                try {
-                  await updateMessage(assistantMessageId, streamedContent);
-                } catch (error) {
-                  logger.error('Failed to update assistant message:', error);
-                }
-              }
-
-              // Generate AI title for new conversations after first assistant message is saved
-              // This avoids database conflicts by ensuring all message persistence is complete
-              if (isNewConversation && activeConversationId) {
-                ConversationManager.generateAndUpdateTitle(activeConversationId, userMessage).catch(
-                  (error) => {
-                    logger.error('Background title generation failed:', error);
-                  }
-                );
-              }
-
-              // Set loading to false when response is complete
-              setIsLoading(false);
-              setStatus('ready');
-              setServerStatus('');
-              stopExecution();
-
-              // Send notification if window is not focused
-              await notificationService.notifyAgentComplete();
-            },
-            onError: (error: Error) => {
-              logger.error('streamResponse error', error);
-              if (abortController.signal.aborted) return;
+            onError: (error) => {
               const errorMessage =
                 error.message || 'Sorry, I encountered some issues. Please try again later.';
               setError(errorMessage);
-
-              // Show error message via serverStatus in the loading indicator area
-              // This ensures error appears at the bottom of the conversation, not before user's next message
-              setServerStatus(`Error: ${errorMessage}`);
-
               onError?.(errorMessage);
-              // Keep isLoading true so the error status is visible
-              // setIsLoading and status will be reset in onComplete or when user sends next message
-            },
-            onStatus: (status: string) => {
-              if (abortController.signal.aborted) return;
-              setServerStatus(status);
-            },
-            onToolMessage: handleToolMessage,
-            onAssistantMessageStart: handleAssistantMessageStart,
-            onAttachment: async (attachment) => {
-              if (abortController.signal.aborted) return;
-              // Add attachment to the current assistant message
-              if (assistantMessageId) {
-                // 1. Update UI
-                addAttachmentToMessage(assistantMessageId, attachment);
-
-                // 2. Persist to database
-                if (activeConversationId) {
-                  try {
-                    await saveAttachment(assistantMessageId, attachment);
-                    logger.info('Saved attachment to database', {
-                      messageId: assistantMessageId,
-                      attachmentId: attachment.id,
-                      type: attachment.type,
-                    });
-                  } catch (error) {
-                    logger.error('Failed to save attachment to database:', error);
-                  }
-                }
-              }
             },
           },
-          abortController,
-          activeConversationId // Pass conversation ID for logging
+          abortController
         );
 
         if (activeConversationId) {
-          // Then fetch the updated conversation data and update state
+          // Fetch the updated conversation data for cost logging
           const updatedConv = await getConversationDetails(activeConversationId);
           if (updatedConv) {
             logger.info('Updated conversation cost:', updatedConv.cost);
-            setConversation(updatedConv);
           }
         }
       } catch (error) {
@@ -622,10 +431,13 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
 
         onError?.(errorMessage);
       } finally {
-        setIsLoading(false);
-        setStatus('ready');
-        stopExecution();
-        abortControllerRef.current = null;
+        // Stop task execution if still running (e.g., on error)
+        // This will automatically update isLoading via store derivation
+        if (activeConversationId && taskExecutionStore.isTaskRunning(activeConversationId)) {
+          taskExecutionStore.stopExecution(activeConversationId);
+        }
+        // Clean up abort controller for this conversation
+        abortControllersRef.current.delete(activeConversationId);
       }
     };
 
@@ -727,16 +539,22 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
     };
 
     const stopGeneration = () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
+      // Use conversationId prop (not ref) to get the correct abort controller
+      // This ensures we stop the task for the currently displayed conversation
+      const taskId = conversationId;
+      if (taskId) {
+        const controller = abortControllersRef.current.get(taskId);
+        if (controller) {
+          controller.abort();
+          abortControllersRef.current.delete(taskId);
+        }
         stopStreaming();
-      }
 
-      setIsLoading(false);
-      setStatus('ready');
-      setServerStatus('');
-      stopExecution();
+        // Stop the task execution in store
+        if (taskExecutionStore.isTaskRunning(taskId)) {
+          taskExecutionStore.stopExecution(taskId);
+        }
+      }
     };
 
     // Handle command execution

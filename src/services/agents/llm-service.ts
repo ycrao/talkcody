@@ -14,12 +14,16 @@ import { getContextLength } from '@/lib/models';
 import { getToolSync } from '@/lib/tools';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
+import { ConversationManager } from '@/services/conversation-manager';
 import { modelService } from '@/services/model-service';
 import { modelTypeService } from '@/services/model-type-service';
+import { notificationService } from '@/services/notification-service';
 import { getValidatedWorkspaceRoot } from '@/services/workspace-root-service';
 import { useConversationUsageStore } from '@/stores/conversation-usage-store';
+import { useMessagesStore } from '@/stores/messages-store';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useTaskExecutionStore } from '@/stores/task-execution-store';
 import { ModelType } from '@/types/model-types';
 import type {
   AgentLoopOptions,
@@ -29,6 +33,30 @@ import type {
   UIMessage,
 } from '../../types/agent';
 import { aiPricingService } from '../ai-pricing-service';
+
+/**
+ * Extended options for agent loop with persistence support
+ */
+export interface AgentLoopConfig extends AgentLoopOptions {
+  /** Conversation ID (required for state persistence) */
+  conversationId: string;
+  /** Whether this is a new conversation (for title generation) */
+  isNewConversation?: boolean;
+  /** Original user message (for title generation) */
+  userMessage?: string;
+}
+
+/**
+ * Simplified callbacks for agent loop
+ * Most state updates are now handled internally via MessagesStore
+ */
+export interface SimplifiedCallbacks {
+  /** Called when the agent loop completes successfully */
+  onComplete?: (result: { success: boolean; fullText: string }) => void;
+  /** Called when an error occurs */
+  onError?: (error: Error) => void;
+}
+
 import { aiProviderService } from '../ai-provider-service';
 import { fileService } from '../file-service';
 import { MessageCompactor } from '../message-compactor';
@@ -41,6 +69,8 @@ export class LLMService {
   private readonly streamProcessor: StreamProcessor;
   private readonly toolExecutor: ToolExecutor;
   private readonly errorHandler: ErrorHandler;
+  /** Task ID for this LLM service instance (used for parallel task execution) */
+  private readonly taskId?: string;
 
   private getDefaultCompressionConfig(): CompressionConfig {
     return {
@@ -66,11 +96,21 @@ export class LLMService {
     return false;
   }
 
-  constructor() {
+  /**
+   * Create a new LLMService instance.
+   * @param taskId Optional task ID for parallel task execution. Each task should have its own instance.
+   */
+  constructor(taskId?: string) {
+    this.taskId = taskId;
     this.messageCompactor = new MessageCompactor(this);
     this.streamProcessor = new StreamProcessor();
     this.toolExecutor = new ToolExecutor();
     this.errorHandler = new ErrorHandler();
+  }
+
+  /** Get the task ID for this instance */
+  getTaskId(): string | undefined {
+    return this.taskId;
   }
 
   private getTranslations() {
@@ -243,7 +283,7 @@ export class LLMService {
           // This is critical for multi-iteration scenarios (e.g., text -> tool call -> text)
           this.streamProcessor.resetState();
 
-          // TODO: enable message filtering after testing
+          // TODO: enable message filtering
           // loopState.messages = this.messageFilter.filterMessages(loopState.messages);
 
           // Check if message compression is needed
@@ -359,7 +399,7 @@ export class LLMService {
                       thinking: { type: 'enabled', budgetTokens: 12_000 },
                     },
                     openai: {
-                      reasoningEffort: 'low',
+                      reasoningEffort: 'medium',
                     },
                   };
 
@@ -840,6 +880,163 @@ export class LLMService {
       }
     });
   }
+
+  /**
+   * Run agent loop with automatic state persistence via MessagesStore.
+   * This is the preferred method for new code - it handles all state updates internally.
+   *
+   * @param config Extended options including conversationId
+   * @param callbacks Simplified callbacks (only onComplete and onError)
+   * @param abortController Optional abort controller for cancellation
+   */
+  async runAgentLoopWithPersist(
+    config: AgentLoopConfig,
+    callbacks: SimplifiedCallbacks,
+    abortController?: AbortController
+  ): Promise<void> {
+    const { conversationId, isNewConversation, userMessage, ...options } = config;
+    const { onComplete, onError } = callbacks;
+
+    const messagesStore = useMessagesStore.getState();
+    const taskStore = useTaskExecutionStore.getState();
+    let currentMessageId = '';
+    let streamedContent = '';
+
+    // Internal callbacks that operate on MessagesStore directly
+    const internalCallbacks = {
+      onChunk: (chunk: string) => {
+        if (abortController?.signal.aborted) return;
+        streamedContent += chunk;
+        messagesStore.updateStreamingContent(conversationId, currentMessageId, streamedContent);
+      },
+
+      onComplete: async (fullText: string) => {
+        if (abortController?.signal.aborted) return;
+
+        // Finalize the last message
+        if (currentMessageId && streamedContent) {
+          await messagesStore.finalizeMessageAndPersist(
+            conversationId,
+            currentMessageId,
+            streamedContent
+          );
+          // Reset after finalization to prevent stale state
+          streamedContent = '';
+        }
+
+        // Post-processing
+        await this.handlePostProcessing(conversationId, isNewConversation, userMessage);
+
+        // Call external callback
+        onComplete?.({ success: true, fullText });
+      },
+
+      onError: (error: Error) => {
+        logger.error('Agent loop error (with persist)', error);
+        if (abortController?.signal.aborted) return;
+
+        taskStore.setError(conversationId, error.message);
+        onError?.(error);
+      },
+
+      onStatus: (status: string) => {
+        if (abortController?.signal.aborted) return;
+        taskStore.setServerStatus(conversationId, status);
+      },
+
+      onToolMessage: async (message: UIMessage) => {
+        if (abortController?.signal.aborted) return;
+        await messagesStore.addToolMessageAndPersist(conversationId, message);
+      },
+
+      onAssistantMessageStart: async () => {
+        if (abortController?.signal.aborted) return;
+
+        // Primary guard: Skip if a message was just created but hasn't received content yet
+        if (currentMessageId && !streamedContent) {
+          logger.info('[runAgentLoopWithPersist] Skipping duplicate (no content yet)', {
+            conversationId,
+            currentMessageId,
+          });
+          return;
+        }
+
+        // Secondary guard: Check store for existing streaming message
+        // This catches race conditions where local variables are stale
+        const existingMessages = messagesStore.getMessages(conversationId);
+        const hasStreamingMessage = existingMessages.some(
+          (msg) => msg.role === 'assistant' && msg.isStreaming
+        );
+        if (hasStreamingMessage && !streamedContent) {
+          logger.info('[runAgentLoopWithPersist] Skipping duplicate (streaming message exists)', {
+            conversationId,
+          });
+          return;
+        }
+
+        // CRITICAL: Save old state before resetting
+        // We must reset BEFORE any async operation to prevent race conditions
+        // where onChunk is called while we're awaiting finalization
+        const oldMessageId = currentMessageId;
+        const oldContent = streamedContent;
+
+        // Reset for new message FIRST (synchronous operations only)
+        streamedContent = '';
+        currentMessageId = messagesStore.createAssistantMessageAndPersist(
+          conversationId,
+          config.agentId
+        );
+
+        // NOW finalize previous message (async, but currentMessageId already updated)
+        // This ensures any onChunk calls during await will use the new messageId
+        if (oldMessageId && oldContent) {
+          await messagesStore.finalizeMessageAndPersist(conversationId, oldMessageId, oldContent);
+        }
+      },
+
+      onAttachment: async (attachment: MessageAttachment) => {
+        if (abortController?.signal.aborted) return;
+        if (currentMessageId) {
+          await messagesStore.addAttachmentAndPersist(conversationId, currentMessageId, attachment);
+        }
+      },
+    };
+
+    // Call the original runAgentLoop with internal callbacks
+    return this.runAgentLoop(options, internalCallbacks, abortController, conversationId);
+  }
+
+  /**
+   * Handle post-processing after agent loop completes
+   */
+  private async handlePostProcessing(
+    conversationId: string,
+    isNewConversation?: boolean,
+    userMessage?: string
+  ): Promise<void> {
+    // Generate AI title for new conversations
+    if (isNewConversation && userMessage) {
+      ConversationManager.generateAndUpdateTitle(conversationId, userMessage).catch((error) => {
+        logger.error('Background title generation failed:', error);
+      });
+    }
+
+    // Mark task execution as completed
+    useTaskExecutionStore.getState().completeExecution(conversationId);
+
+    // Send notification if window is not focused
+    await notificationService.notifyAgentComplete();
+  }
 }
 
+/**
+ * Create a new LLMService instance for a specific task.
+ * Use this for parallel task execution where each task needs isolated state.
+ * @param taskId The unique task ID (equivalent to conversationId)
+ */
+export function createLLMService(taskId: string): LLMService {
+  return new LLMService(taskId);
+}
+
+/** Default singleton instance for backward compatibility */
 export const llmService = new LLMService();

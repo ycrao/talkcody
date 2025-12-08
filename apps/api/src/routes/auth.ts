@@ -29,6 +29,94 @@ function getOAuthConfig(c: Context<HonoContext>) {
   };
 }
 
+function renderSuccessPage(deepLink: string) {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Authentication Successful</title>
+      <style>
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body {
+          margin: 0;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: radial-gradient(circle at 20% 20%, #1c1c1f, #0b0b0f 60%);
+          color: #f5f5f5;
+          font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          letter-spacing: 0.01em;
+        }
+        .wrap { width: min(540px, 90vw); padding: 32px; }
+        .card {
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(12, 12, 16, 0.85);
+          border-radius: 20px;
+          padding: 32px;
+          box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+          backdrop-filter: blur(16px);
+          text-align: center;
+        }
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+          font-size: 28px;
+          margin-bottom: 20px;
+        }
+        h1 { margin: 0 0 12px; font-size: 26px; font-weight: 600; color: #f8f8f8; }
+        .sub { margin: 0 0 24px; color: #cfcfd4; font-size: 15px; }
+        .spinner {
+          margin: 0 auto 20px;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          border: 4px solid rgba(255, 255, 255, 0.15);
+          border-top-color: #ffffff;
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hint { margin: 0; color: #b6b6bd; line-height: 1.6; font-size: 14px; }
+        .link {
+          color: #ffffff;
+          text-decoration: none;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+          padding-bottom: 2px;
+          transition: opacity 0.2s ease;
+        }
+        .link:hover { opacity: 0.7; }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="card">
+          <div class="badge">✓</div>
+          <h1>Authentication Successful</h1>
+          <p class="sub">Signed in. Redirecting to TalkCody...</p>
+          <div class="spinner" aria-label="Loading"></div>
+          <p class="hint">
+            If the app doesn't open automatically, <a class="link" href="${deepLink}" id="manual-link">click to continue</a> or return to the app to finish.
+          </p>
+        </div>
+      </div>
+      <script>
+        setTimeout(() => { window.location.href = '${deepLink}'; }, 900);
+        setTimeout(() => { window.close(); }, 9000);
+      </script>
+    </body>
+    </html>
+  `;
+}
+
 /**
  * GitHub OAuth
  */
@@ -78,74 +166,7 @@ auth.get('/github', async (c) => {
 
     // Return HTML page that handles deep link redirect
     const deepLink = `talkcody://auth/callback?token=${token}`;
-    return c.html(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Authentication Successful</title>
-        <meta charset="utf-8">
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-          }
-          .container {
-            text-align: center;
-            padding: 2rem;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            backdrop-filter: blur(10px);
-          }
-          .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          a {
-            color: white;
-            text-decoration: underline;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="spinner"></div>
-          <h1>✓ Authentication Successful!</h1>
-          <p>Redirecting to TalkCody...</p>
-          <p style="margin-top: 2rem; font-size: 0.9rem;">
-            If the app doesn't open automatically,
-            <a href="${deepLink}" id="manual-link">click here</a>
-            or close this window and return to the app.
-          </p>
-        </div>
-        <script>
-          // Automatically redirect to deep link
-          setTimeout(() => {
-            window.location.href = '${deepLink}';
-          }, 1000);
-
-          // Close window after redirect attempt (give user enough time to see the page)
-          setTimeout(() => {
-            window.close();
-          }, 10000);
-        </script>
-      </body>
-      </html>
-    `);
+    return c.html(renderSuccessPage(deepLink));
   } catch (error) {
     console.error('GitHub auth error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
@@ -191,74 +212,7 @@ auth.get('/google', async (c) => {
 
     // Return HTML page that handles deep link redirect
     const deepLink = `talkcody://auth/callback?token=${token}`;
-    return c.html(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Authentication Successful</title>
-        <meta charset="utf-8">
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-          }
-          .container {
-            text-align: center;
-            padding: 2rem;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            backdrop-filter: blur(10px);
-          }
-          .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
-          }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-          a {
-            color: white;
-            text-decoration: underline;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="spinner"></div>
-          <h1>✓ Authentication Successful!</h1>
-          <p>Redirecting to TalkCody...</p>
-          <p style="margin-top: 2rem; font-size: 0.9rem;">
-            If the app doesn't open automatically,
-            <a href="${deepLink}" id="manual-link">click here</a>
-            or close this window and return to the app.
-          </p>
-        </div>
-        <script>
-          // Automatically redirect to deep link
-          setTimeout(() => {
-            window.location.href = '${deepLink}';
-          }, 1000);
-
-          // Close window after redirect attempt (give user enough time to see the page)
-          setTimeout(() => {
-            window.close();
-          }, 10000);
-        </script>
-      </body>
-      </html>
-    `);
+    return c.html(renderSuccessPage(deepLink));
   } catch (error) {
     console.error('Google auth error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Authentication failed';

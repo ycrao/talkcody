@@ -95,7 +95,7 @@ export function renderNestedToolsList(
   // Collect all tool-call messages
   const toolCalls = nestedTools.filter(
     (msg) =>
-      msg.role === 'assistant' &&
+      msg.role === 'tool' &&
       Array.isArray(msg.content) &&
       msg.content.some((c) => c.type === 'tool-call')
   );

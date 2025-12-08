@@ -3,6 +3,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useMessages } from '@/hooks/use-messages';
+import { useMessagesStore } from '@/stores/messages-store';
 
 /**
  * This test verifies that when an agent loop has multiple iterations
@@ -23,6 +24,9 @@ import { useMessages } from '@/hooks/use-messages';
  * All messages should persist to database with correct content.
  */
 
+// Test conversation ID for all tests
+const TEST_CONVERSATION_ID = 'test-multi-iteration-conversation';
+
 describe('Multi-iteration assistant messages', () => {
   let databaseMessages: Map<string, string>;
 
@@ -36,10 +40,12 @@ describe('Multi-iteration assistant messages', () => {
 
   beforeEach(() => {
     databaseMessages = new Map();
+    // Reset messages store
+    useMessagesStore.getState().messagesByConversation.clear();
   });
 
   it('should persist multiple assistant messages correctly during agent loop', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     // Add user message
     let userMsgId: string;
@@ -174,7 +180,7 @@ describe('Multi-iteration assistant messages', () => {
   });
 
   it('should handle three iterations correctly', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     // Add user message
     let userMsgId: string;
@@ -246,7 +252,7 @@ describe('Multi-iteration assistant messages', () => {
   });
 
   it('should handle empty first message followed by content', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     let streamedContent = '';
     let assistantMessageId = '';

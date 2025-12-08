@@ -307,15 +307,6 @@ export class ToolExecutor {
             toolCallId: toolCall.toolCallId,
             toolName: toolCall.toolName,
           };
-          // logger.info('[ToolExecutor] 📤 Sending tool-result message via onToolMessage', {
-          //   messageId: toolResultMessage.id,
-          //   toolName: toolCall.toolName,
-          //   toolCallId: toolCall.toolCallId,
-          //   role: toolResultMessage.role,
-          //   contentType: Array.isArray(toolResultMessage.content)
-          //     ? 'array'
-          //     : typeof toolResultMessage.content,
-          // });
           onToolMessage(toolResultMessage);
           logger.info('[ToolExecutor] ✅ Tool-result message sent successfully');
         } else {

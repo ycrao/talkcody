@@ -265,12 +265,19 @@ describe('PlanReviewCard Rendering', () => {
 });
 
 describe('Integration: useMessages addMessage with renderDoingUI', () => {
+  const TEST_CONVERSATION_ID = 'test-integration-conversation';
+
   it('validates that addMessage preserves renderDoingUI in the message', async () => {
     // This test validates the fix works at the hook level
     const { renderHook, act } = await import('@testing-library/react');
     const { useMessages } = await import('@/hooks/use-messages');
+    const { useMessagesStore } = await import('@/stores/messages-store');
 
-    const { result } = renderHook(() => useMessages());
+    // Reset messages store before test
+    useMessagesStore.getState().messagesByConversation.clear();
+
+    // useMessages now requires conversationId for per-conversation message caching
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage(

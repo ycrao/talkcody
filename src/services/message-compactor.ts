@@ -12,7 +12,6 @@ import type {
 } from '@/types/agent';
 
 export class MessageCompactor {
-  private readonly MAX_CACHE_SIZE = 10;
   private readonly COMPRESSION_TIMEOUT_MS = 30000; // 30 seconds timeout
   private compressionStats = {
     totalCompressions: 0,

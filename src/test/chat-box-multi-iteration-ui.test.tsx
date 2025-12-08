@@ -22,6 +22,10 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useMessages } from '@/hooks/use-messages';
+import { useMessagesStore } from '@/stores/messages-store';
+
+// Test conversation ID for all tests
+const TEST_CONVERSATION_ID = 'test-multi-iteration-ui-conversation';
 
 describe('Chat-box multi-iteration UI state management', () => {
   let streamedContent = '';
@@ -46,10 +50,12 @@ describe('Chat-box multi-iteration UI state management', () => {
     streamedContent = '';
     assistantMessageId = '';
     database.clear();
+    // Reset messages store
+    useMessagesStore.getState().messagesByConversation.clear();
   });
 
   it('should maintain all messages in UI during multi-iteration', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     // Helper function to simulate iteration
     const simulateIteration = async (text: string) => {
@@ -144,7 +150,7 @@ describe('Chat-box multi-iteration UI state management', () => {
   });
 
   it('should handle three iterations correctly', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     const simulateIteration = async (text: string) => {
       if (assistantMessageId && streamedContent) {
@@ -218,7 +224,7 @@ describe('Chat-box multi-iteration UI state management', () => {
   });
 
   it('should handle empty first message followed by content', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Test', false);
@@ -264,7 +270,7 @@ describe('Chat-box multi-iteration UI state management', () => {
   });
 
   it('should correctly set isStreaming flag during and after streaming', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Test', false);
@@ -314,7 +320,7 @@ describe('Chat-box multi-iteration UI state management', () => {
   });
 
   it('should preserve message content when creating new iteration', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Test', false);
@@ -344,7 +350,7 @@ describe('Chat-box multi-iteration UI state management', () => {
   });
 
   it('should handle rapid iterations without losing messages', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Test', false);
@@ -396,7 +402,7 @@ describe('Chat-box multi-iteration UI state management', () => {
   });
 
   it('should maintain chronological order of messages', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     const simulateIteration = async (text: string) => {
       if (assistantMessageId && streamedContent) {
@@ -464,10 +470,12 @@ describe('Chat-box with updateMessageById fix', () => {
     streamedContent = '';
     assistantMessageId = '';
     database.clear();
+    // Reset messages store
+    useMessagesStore.getState().messagesByConversation.clear();
   });
 
   it('should correctly update messages using updateMessageById', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Test question', false);
@@ -484,7 +492,7 @@ describe('Chat-box with updateMessageById fix', () => {
   });
 
   it('should prevent the race condition bug with updateMessageById', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'What is the capital of France?', false);
@@ -538,7 +546,7 @@ describe('Chat-box with updateMessageById fix', () => {
   });
 
   it('should handle simultaneous addMessage and updateMessageById calls', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Test', false);
@@ -568,7 +576,7 @@ describe('Chat-box with updateMessageById fix', () => {
   });
 
   it('should maintain message integrity across multiple rapid iterations', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Complex task', false);
@@ -608,7 +616,7 @@ describe('Chat-box with updateMessageById fix', () => {
   });
 
   it('should handle streaming updates correctly with updateMessageById', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Write hello world', false);
@@ -642,7 +650,7 @@ describe('Chat-box with updateMessageById fix', () => {
   });
 
   it('should handle reasoning/thinking content correctly', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', '你好', false);
@@ -701,7 +709,7 @@ describe('Chat-box with updateMessageById fix', () => {
   });
 
   it('should maintain correct message order and IDs throughout iterations', async () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     const messageSnapshots: Array<{ id: string; content: string; role: string }> = [];
 

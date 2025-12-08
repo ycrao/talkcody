@@ -42,15 +42,17 @@ describe('MainContent - State Persistence on Page Switch', () => {
   it('should render all pages in the DOM but only show the active one', () => {
     const { container } = render(<MainContent activeView={NavigationView.CHAT} />);
 
-    // All pages should be in the DOM
+    // Only ExplorerPage and ChatOnlyPage are always mounted (to preserve state)
+    // Other pages are lazy loaded - only rendered when active
     expect(screen.getByTestId('explorer-page')).toBeInTheDocument();
     expect(screen.getByTestId('chat-page')).toBeInTheDocument();
-    expect(screen.getByTestId('projects-page')).toBeInTheDocument();
-    // Note: agent-marketplace-page appears twice (for AGENTS and MARKETPLACE views)
-    expect(screen.getAllByTestId('agent-marketplace-page')).toHaveLength(2);
-    expect(screen.getByTestId('skills-marketplace-page')).toBeInTheDocument();
-    expect(screen.getByTestId('mcp-servers-page')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+
+    // Other pages should NOT be in the DOM when not active
+    expect(screen.queryByTestId('projects-page')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('agent-marketplace-page')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('skills-marketplace-page')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mcp-servers-page')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
 
     // Only chat page should be visible (not hidden)
     const chatPageContainer = screen.getByTestId('chat-page').parentElement;

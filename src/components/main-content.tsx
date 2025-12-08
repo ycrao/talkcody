@@ -15,7 +15,7 @@ interface MainContentProps {
 export function MainContent({ activeView }: MainContentProps) {
   return (
     <div className="h-full w-full">
-      {/* Keep all views mounted, use CSS to show/hide to preserve state */}
+      {/* Keep ExplorerPage and ChatOnlyPage mounted to preserve state */}
       <div className={activeView === NavigationView.EXPLORER ? 'h-full' : 'hidden'}>
         <ExplorerPage />
       </div>
@@ -24,33 +24,18 @@ export function MainContent({ activeView }: MainContentProps) {
         <ChatOnlyPage />
       </div>
 
-      <div className={activeView === NavigationView.PROJECTS ? 'h-full' : 'hidden'}>
-        <ProjectsPage />
-      </div>
+      {/* Lazy load these pages to avoid unnecessary network requests on startup */}
+      {activeView === NavigationView.PROJECTS && <ProjectsPage />}
 
-      <div className={activeView === NavigationView.AGENTS ? 'h-full' : 'hidden'}>
-        <AgentMarketplacePage />
-      </div>
+      {activeView === NavigationView.AGENTS_MARKETPLACE && <AgentMarketplacePage />}
 
-      <div className={activeView === NavigationView.MARKETPLACE ? 'h-full' : 'hidden'}>
-        <AgentMarketplacePage />
-      </div>
+      {activeView === NavigationView.SKILLS_MARKETPLACE && <SkillsMarketplacePage />}
 
-      <div className={activeView === NavigationView.SKILLS_MARKETPLACE ? 'h-full' : 'hidden'}>
-        <SkillsMarketplacePage />
-      </div>
+      {activeView === NavigationView.MCP_SERVERS && <MCPServersPage />}
 
-      <div className={activeView === NavigationView.MCP_SERVERS ? 'h-full' : 'hidden'}>
-        <MCPServersPage />
-      </div>
+      {activeView === NavigationView.LOGS && <LogsPage />}
 
-      <div className={activeView === NavigationView.LOGS ? 'h-full' : 'hidden'}>
-        <LogsPage />
-      </div>
-
-      <div className={activeView === NavigationView.SETTINGS ? 'h-full' : 'hidden'}>
-        <SettingsPage />
-      </div>
+      {activeView === NavigationView.SETTINGS && <SettingsPage />}
     </div>
   );
 }

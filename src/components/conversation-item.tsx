@@ -1,4 +1,5 @@
-import { Calendar, Edit2, Hash, MoreVertical, Trash2 } from 'lucide-react';
+import { Calendar, Edit2, Hash, LoaderCircle, MoreVertical, Trash2 } from 'lucide-react';
+import { memo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -16,6 +17,8 @@ interface ConversationItemProps {
   isSelected: boolean;
   isEditing: boolean;
   editingTitle: string;
+  /** Whether this conversation/task is currently running */
+  isRunning?: boolean;
   onSelect: (conversationId: string) => void;
   onDelete: (conversationId: string, e?: React.MouseEvent) => void;
   onStartEditing: (conversation: Conversation, e?: React.MouseEvent) => void;
@@ -24,11 +27,12 @@ interface ConversationItemProps {
   onTitleChange: (title: string) => void;
 }
 
-export function ConversationItem({
+export const ConversationItem = memo(function ConversationItem({
   conversation,
   isSelected,
   isEditing,
   editingTitle,
+  isRunning = false,
   onSelect,
   onDelete,
   onStartEditing,
@@ -100,7 +104,12 @@ export function ConversationItem({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h5 className="mb-1 line-clamp-2 font-medium text-sm">{displayTitle}</h5>
+          <div className="mb-1 flex items-center gap-2">
+            <h5 className="line-clamp-2 font-medium text-sm">{displayTitle}</h5>
+            {isRunning && (
+              <LoaderCircle className="h-3 w-3 flex-shrink-0 animate-spin text-blue-500" />
+            )}
+          </div>
           <div className="flex items-center gap-3 text-muted-foreground text-xs">
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
@@ -151,4 +160,4 @@ export function ConversationItem({
       </div>
     </div>
   );
-}
+});

@@ -17,17 +17,24 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useMessages } from '@/hooks/use-messages';
+import { useMessagesStore } from '@/stores/messages-store';
 import { useRepositoryStore } from '@/stores/repository-store';
+
+// Test conversation ID for all tests
+const TEST_CONVERSATION_ID = 'test-conversation-123';
 
 describe('Project Switch - Chat Messages Persistence', () => {
   beforeEach(() => {
     // Reset repository store
     useRepositoryStore.setState({ rootPath: null, fileTree: null });
+    // Reset messages store
+    useMessagesStore.getState().messagesByConversation.clear();
   });
 
   describe('useMessages state persistence', () => {
     it('should NOT clear messages when repository state changes', () => {
-      const { result } = renderHook(() => useMessages());
+      // useMessages now requires conversationId for per-conversation message caching
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       // Add messages
       act(() => {
@@ -52,7 +59,7 @@ describe('Project Switch - Chat Messages Persistence', () => {
     });
 
     it('should preserve messages when switching from no repository to having one', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       // Add messages while no repository is open
       act(() => {
@@ -73,7 +80,7 @@ describe('Project Switch - Chat Messages Persistence', () => {
     });
 
     it('should preserve messages when switching between repositories', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       // Set initial repository
       act(() => {
@@ -102,7 +109,7 @@ describe('Project Switch - Chat Messages Persistence', () => {
     });
 
     it('should preserve messages when closing repository', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       // Set initial repository
       act(() => {
@@ -133,7 +140,7 @@ describe('Project Switch - Chat Messages Persistence', () => {
     });
 
     it('should preserve messages with attachments during project switch', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       const attachments = [
         {

@@ -45,7 +45,7 @@ export function NavigationSidebar({ activeView, onViewChange }: NavigationSideba
       tooltip: `${t.Navigation.projectsTooltip}`,
     },
     {
-      id: NavigationView.AGENTS,
+      id: NavigationView.AGENTS_MARKETPLACE,
       icon: Bot,
       label: t.Navigation.agents,
       tooltip: `${t.Navigation.agentsTooltip}`,
@@ -69,7 +69,7 @@ export function NavigationSidebar({ activeView, onViewChange }: NavigationSideba
   };
 
   const handleAgentsClick = () => {
-    onViewChange(NavigationView.AGENTS);
+    onViewChange(NavigationView.AGENTS_MARKETPLACE);
   };
 
   const handleGitHubClick = () => {
@@ -96,7 +96,7 @@ export function NavigationSidebar({ activeView, onViewChange }: NavigationSideba
                     isActive && 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
                   )}
                   onClick={() => {
-                    if (item.id === NavigationView.AGENTS) {
+                    if (item.id === NavigationView.AGENTS_MARKETPLACE) {
                       handleAgentsClick();
                     } else {
                       onViewChange(item.id);

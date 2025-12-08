@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -12,7 +13,7 @@ import {
 import { useConversations } from '@/hooks/use-conversations';
 import { useProjects } from '@/hooks/use-projects';
 import { cn } from '@/lib/utils';
-import { useAgentExecutionStore } from '@/stores/agent-execution-store';
+import { useTaskExecutionStore } from '@/stores/task-execution-store';
 import { ConversationList } from './conversation-list';
 
 interface ChatHistorySidebarProps {
@@ -31,7 +32,9 @@ export function ChatHistorySidebar({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all');
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { isAgentRunning } = useAgentExecutionStore();
+  // Use selectors to avoid re-rendering on every streaming chunk
+  const runningTaskIds = useTaskExecutionStore(useShallow((state) => state.getRunningTaskIds()));
+  const isMaxReached = useTaskExecutionStore((state) => state.isMaxReached());
 
   const {
     conversations,
@@ -96,9 +99,10 @@ export function ChatHistorySidebar({
               <h4 className="font-medium text-sm">Chat History</h4>
               <Button
                 className="h-6 px-2 text-xs"
-                disabled={isAgentRunning}
+                disabled={isMaxReached}
                 onClick={handleNewChat}
                 size="sm"
+                title={isMaxReached ? 'Maximum concurrent tasks reached' : undefined}
                 variant="ghost"
               >
                 <Plus className="mr-1 h-3 w-3" />
@@ -149,6 +153,7 @@ export function ChatHistorySidebar({
               onSaveEdit={finishEditing}
               onStartEditing={startEditing}
               onTitleChange={setEditingTitle}
+              runningTaskIds={runningTaskIds}
             />
           </div>
 

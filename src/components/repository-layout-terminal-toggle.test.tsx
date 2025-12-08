@@ -13,17 +13,23 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useMessages } from '@/hooks/use-messages';
+import { useMessagesStore } from '@/stores/messages-store';
 import { useTerminalStore } from '@/stores/terminal-store';
+
+// Test conversation ID for all tests
+const TEST_CONVERSATION_ID = 'test-terminal-toggle-conversation';
 
 describe('Terminal Toggle - Chat Messages Persistence', () => {
   beforeEach(() => {
     // Reset terminal store
     useTerminalStore.setState({ isTerminalVisible: false });
+    // Reset messages store
+    useMessagesStore.getState().messagesByConversation.clear();
   });
 
   describe('useMessages state persistence', () => {
     it('should NOT clear messages when terminal visibility changes', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       // Add messages
       act(() => {
@@ -47,7 +53,7 @@ describe('Terminal Toggle - Chat Messages Persistence', () => {
     });
 
     it('should preserve messages through multiple terminal toggles', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       act(() => {
         result.current.addMessage('user', 'Test message', false);
@@ -64,7 +70,7 @@ describe('Terminal Toggle - Chat Messages Persistence', () => {
     });
 
     it('should preserve messages with attachments during terminal toggle', () => {
-      const { result } = renderHook(() => useMessages());
+      const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
       const attachments = [
         {

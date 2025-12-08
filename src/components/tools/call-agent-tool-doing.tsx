@@ -20,21 +20,6 @@ export function CallAgentToolDoing({ agentId, task, toolCallId }: CallAgentToolD
     toolCallId ? (state.messagesByParent[toolCallId] ?? EMPTY_MESSAGES) : EMPTY_MESSAGES
   );
 
-  // useEffect(() => {
-  //   logger.info('[CallAgentToolDoing] Component rendered/updated:', {
-  //     agentId,
-  //     toolCallId,
-  //     nestedToolsCount: nestedToolsFromStore.length,
-  //     nestedToolsIds: nestedToolsFromStore.map(t => ({ id: t.id, toolName: t.toolName, role: t.role }))
-  //   });
-  // }, [agentId, toolCallId, nestedToolsFromStore]);
-
-  // logger.info('[CallAgentToolDoing] Rendering with nestedTools from store:', {
-  //   toolCallId,
-  //   count: nestedToolsFromStore.length,
-  //   willRenderList: nestedToolsFromStore.length > 0
-  // });
-
   return (
     <div className="space-y-3">
       <GenericToolDoing type="agent" operation="call" target={`Agent: ${agentId}`} details={task} />

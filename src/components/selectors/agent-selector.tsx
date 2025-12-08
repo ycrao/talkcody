@@ -77,7 +77,7 @@ export function AgentSelector({ disabled = false }: AgentSelectorProps) {
   const handleChange = async (id: string) => {
     try {
       if (id === '__manage__') {
-        setActiveView(NavigationView.AGENTS);
+        setActiveView(NavigationView.AGENTS_MARKETPLACE);
         return;
       }
       await setAssistantId(id);

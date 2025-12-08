@@ -181,8 +181,12 @@ export class StreamProcessor {
   processTextStart(callbacks: StreamProcessorCallbacks): void {
     const t = getTranslations();
     callbacks.onStatus?.(t.StreamProcessor.status.answering);
-    this.state.isAnswering = true;
-    callbacks.onAssistantMessageStart?.();
+    // Only call onAssistantMessageStart if not already answering
+    // This prevents duplicate message creation when reasoning comes before text-start
+    if (!this.state.isAnswering) {
+      this.state.isAnswering = true;
+      callbacks.onAssistantMessageStart?.();
+    }
   }
 
   /**

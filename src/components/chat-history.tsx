@@ -1,11 +1,12 @@
 import { History, Plus, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useConversations } from '@/hooks/use-conversations';
 import { useTranslation } from '@/hooks/use-locale';
-import { useAgentExecutionStore } from '@/stores/agent-execution-store';
+import { useTaskExecutionStore } from '@/stores/task-execution-store';
 import { ConversationList } from './conversation-list';
 
 interface ChatHistoryProps {
@@ -25,7 +26,9 @@ export function ChatHistory({
 }: ChatHistoryProps) {
   const t = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
-  const { isAgentRunning } = useAgentExecutionStore();
+  // Use selectors to avoid re-rendering on every streaming chunk
+  const runningTaskIds = useTaskExecutionStore(useShallow((state) => state.getRunningTaskIds()));
+  const isMaxReached = useTaskExecutionStore((state) => state.isMaxReached());
 
   const {
     conversations,
@@ -83,9 +86,10 @@ export function ChatHistory({
               <h4 className="font-medium text-sm">{t.Chat.chatHistory}</h4>
               <Button
                 className="h-6 px-2 text-xs"
-                disabled={isAgentRunning}
+                disabled={isMaxReached}
                 onClick={handleNewChat}
                 size="sm"
+                title={isMaxReached ? 'Maximum concurrent tasks reached' : undefined}
                 variant="ghost"
               >
                 <Plus className="mr-1 h-3 w-3" />
@@ -117,6 +121,7 @@ export function ChatHistory({
               onSaveEdit={finishEditing}
               onStartEditing={startEditing}
               onTitleChange={setEditingTitle}
+              runningTaskIds={runningTaskIds}
             />
           </div>
         </div>

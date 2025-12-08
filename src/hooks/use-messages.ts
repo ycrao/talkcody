@@ -1,16 +1,32 @@
 // src/hooks/use-messages.ts
-import { useCallback, useState } from 'react';
-import { logger } from '@/lib/logger';
-import { generateId } from '@/lib/utils';
+/**
+ * useMessages hook - Interface to MessagesStore
+ *
+ * This hook provides a React-friendly interface to the MessagesStore.
+ * All message state is now centralized in the store, enabling:
+ * - Fast conversation switching (no re-fetch needed)
+ * - State derivation instead of synchronization
+ * - Messages persist across conversation switches
+ */
+
+import { useCallback, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useMessagesStore } from '@/stores/messages-store';
 import type { MessageAttachment, UIMessage } from '@/types/agent';
 
-export function useMessages() {
-  const [messages, setMessages] = useState<UIMessage[]>([]);
+export function useMessages(conversationId?: string) {
+  // Get messages from store (reactive)
+  const messages = useMessagesStore(
+    useShallow((state) => (conversationId ? state.getMessages(conversationId) : []))
+  );
+
+  // Get store actions
+  const store = useMessagesStore.getState();
 
   const addMessage = useCallback(
     (
       role: 'user' | 'assistant' | 'tool',
-      content: string | any,
+      content: string | unknown,
       isStreaming = false,
       assistantId?: string,
       attachments?: MessageAttachment[],
@@ -20,23 +36,19 @@ export function useMessages() {
       nestedTools?: UIMessage[],
       renderDoingUI?: boolean
     ) => {
-      const newMessage: UIMessage = {
-        id: id || generateId(),
-        role,
-        content,
-        timestamp: new Date(),
+      if (!conversationId) return '';
+      return store.addMessage(conversationId, role, content, {
         isStreaming,
         assistantId,
         attachments,
+        id,
         toolCallId,
         toolName,
         nestedTools,
         renderDoingUI,
-      };
-      setMessages((prev) => [...prev, newMessage]);
-      return newMessage.id;
+      });
     },
-    []
+    [conversationId, store]
   );
 
   const updateMessageById = useCallback(
@@ -46,164 +58,117 @@ export function useMessages() {
       isStreaming = false,
       attachments?: MessageAttachment[]
     ) => {
-      setMessages((prev) => {
-        return prev.map((msg) =>
-          msg.id === messageId
-            ? {
-                ...msg,
-                content,
-                isStreaming,
-                ...(attachments && { attachments }),
-              }
-            : msg
-        );
-      });
+      if (!conversationId) return;
+      if (attachments) {
+        store.updateMessage(conversationId, messageId, { content, isStreaming, attachments });
+      } else {
+        store.updateMessageContent(conversationId, messageId, content, isStreaming);
+      }
     },
-    []
+    [conversationId, store]
   );
 
-  const deleteMessage = useCallback((messageId: string) => {
-    setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
-  }, []);
+  const deleteMessage = useCallback(
+    (messageId: string) => {
+      if (!conversationId) return;
+      store.deleteMessage(conversationId, messageId);
+    },
+    [conversationId, store]
+  );
 
-  const editMessage = useCallback((messageId: string, newContent: string) => {
-    setMessages((prev) =>
-      prev.map((msg) => (msg.id === messageId ? { ...msg, content: newContent } : msg))
-    );
-  }, []);
+  const editMessage = useCallback(
+    (messageId: string, newContent: string) => {
+      if (!conversationId) return;
+      store.updateMessage(conversationId, messageId, { content: newContent });
+    },
+    [conversationId, store]
+  );
 
-  const deleteMessagesFromIndex = useCallback((index: number) => {
-    setMessages((prev) => prev.slice(0, index));
-  }, []);
+  const deleteMessagesFromIndex = useCallback(
+    (index: number) => {
+      if (!conversationId) return;
+      store.deleteMessagesFromIndex(conversationId, index);
+    },
+    [conversationId, store]
+  );
 
   const clearMessages = useCallback(() => {
-    setMessages([]);
-  }, []);
+    if (!conversationId) return;
+    store.clearMessages(conversationId);
+  }, [conversationId, store]);
 
   const stopStreaming = useCallback(() => {
-    setMessages((prev) =>
-      prev.map((msg) => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
-    );
-  }, []);
+    if (!conversationId) return;
+    store.stopStreaming(conversationId);
+  }, [conversationId, store]);
 
-  const setMessagesFromHistory = useCallback((historyMessages: UIMessage[]) => {
-    setMessages(historyMessages);
-  }, []);
+  const setMessagesFromHistory = useCallback(
+    (historyMessages: UIMessage[]) => {
+      if (!conversationId) return;
+      store.setMessages(conversationId, historyMessages);
+    },
+    [conversationId, store]
+  );
 
   const findMessageIndex = useCallback(
     (messageId: string) => {
-      return messages.findIndex((msg) => msg.id === messageId);
+      if (!conversationId) return -1;
+      return store.findMessageIndex(conversationId, messageId);
     },
-    [messages]
+    [conversationId, store]
   );
 
   const getLastUserMessage = useCallback(() => {
-    const userMessages = messages.filter((msg) => msg.role === 'user');
-    return userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
-  }, [messages]);
+    if (!conversationId) return null;
+    return store.getLastUserMessage(conversationId);
+  }, [conversationId, store]);
 
-  // Add an attachment to a message
-  const addAttachmentToMessage = useCallback((messageId: string, attachment: MessageAttachment) => {
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId
-          ? {
-              ...msg,
-              attachments: [...(msg.attachments || []), attachment],
-            }
-          : msg
-      )
-    );
-  }, []);
-
-  // Update nested tool messages for a parent tool
-  const updateMessageWithNestedTool = useCallback(
-    (parentToolCallId: string, nestedMessage: UIMessage) => {
-      logger.info('[useMessages] updateMessageWithNestedTool called:', {
-        parentToolCallId,
-        nestedMessageId: nestedMessage.id,
-        nestedMessageRole: nestedMessage.role,
-        nestedMessageType: Array.isArray(nestedMessage.content)
-          ? nestedMessage.content.map((c: any) => c.type).join(',')
-          : 'string',
-      });
-
-      setMessages((prev) => {
-        logger.info(
-          '[useMessages] Current messages in state:',
-          prev.map((m) => ({
-            id: m.id,
-            toolCallId: m.toolCallId,
-            role: m.role,
-            hasNestedTools: !!m.nestedTools,
-            nestedToolsCount: m.nestedTools?.length || 0,
-          }))
-        );
-
-        let foundParent = false;
-
-        const updated = prev.map((msg) => {
-          // Find the parent tool's tool-call message
-          if (msg.toolCallId === parentToolCallId && msg.role === 'assistant') {
-            foundParent = true;
-            logger.info('[useMessages] ✅ FOUND parent message:', {
-              messageId: msg.id,
-              toolCallId: msg.toolCallId,
-              currentNestedToolsCount: msg.nestedTools?.length || 0,
-            });
-
-            // Add or update nestedTools array
-            const existingNestedTools = msg.nestedTools || [];
-
-            // Check if this nested message already exists (by id)
-            const existingIndex = existingNestedTools.findIndex((t) => t.id === nestedMessage.id);
-
-            let updatedNestedTools: UIMessage[];
-            if (existingIndex >= 0) {
-              // Update existing nested message
-              updatedNestedTools = [...existingNestedTools];
-              updatedNestedTools[existingIndex] = nestedMessage;
-              logger.info('[useMessages] Updated existing nested tool at index:', existingIndex);
-            } else {
-              // Add new nested message
-              updatedNestedTools = [...existingNestedTools, nestedMessage];
-              logger.info(
-                '[useMessages] Added new nested tool, total count:',
-                updatedNestedTools.length
-              );
-            }
-
-            return {
-              ...msg,
-              nestedTools: updatedNestedTools,
-            };
-          }
-          return msg;
-        });
-
-        if (!foundParent) {
-          logger.warn('[useMessages] ⚠️ Parent message NOT FOUND for toolCallId:', parentToolCallId);
-        }
-
-        return updated;
-      });
+  const addAttachmentToMessage = useCallback(
+    (messageId: string, attachment: MessageAttachment) => {
+      if (!conversationId) return;
+      store.addAttachmentToMessage(conversationId, messageId, attachment);
     },
-    []
+    [conversationId, store]
   );
 
-  return {
-    messages,
-    addMessage,
-    updateMessageById,
-    deleteMessage,
-    editMessage,
-    deleteMessagesFromIndex,
-    clearMessages,
-    stopStreaming,
-    setMessagesFromHistory,
-    findMessageIndex,
-    getLastUserMessage,
-    addAttachmentToMessage,
-    updateMessageWithNestedTool,
-  };
+  const updateMessageWithNestedTool = useCallback(
+    (parentToolCallId: string, nestedMessage: UIMessage) => {
+      if (!conversationId) return;
+      store.updateMessageWithNestedTool(conversationId, parentToolCallId, nestedMessage);
+    },
+    [conversationId, store]
+  );
+
+  return useMemo(
+    () => ({
+      messages,
+      addMessage,
+      updateMessageById,
+      deleteMessage,
+      editMessage,
+      deleteMessagesFromIndex,
+      clearMessages,
+      stopStreaming,
+      setMessagesFromHistory,
+      findMessageIndex,
+      getLastUserMessage,
+      addAttachmentToMessage,
+      updateMessageWithNestedTool,
+    }),
+    [
+      messages,
+      addMessage,
+      updateMessageById,
+      deleteMessage,
+      editMessage,
+      deleteMessagesFromIndex,
+      clearMessages,
+      stopStreaming,
+      setMessagesFromHistory,
+      findMessageIndex,
+      getLastUserMessage,
+      addAttachmentToMessage,
+      updateMessageWithNestedTool,
+    ]
+  );
 }

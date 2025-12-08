@@ -1,11 +1,5 @@
 import type { ReasoningPart, TextPart } from '@ai-sdk/provider-utils';
 
-/**
- * Provider-specific message transformation utilities
- * Similar to OpenCode's transform.ts pattern
- *
- * @see https://github.com/sst/opencode/pull/4975
- */
 export namespace MessageTransform {
   /**
    * Check if the model is a DeepSeek model

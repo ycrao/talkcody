@@ -18,12 +18,20 @@
  */
 
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useMessages } from '@/hooks/use-messages';
+import { useMessagesStore } from '@/stores/messages-store';
+
+// Test conversation ID for all tests
+const TEST_CONVERSATION_ID = 'test-error-handling-conversation';
 
 describe('ChatBox error handling - duplicate error message fix', () => {
+  beforeEach(() => {
+    // Reset messages store
+    useMessagesStore.getState().messagesByConversation.clear();
+  });
   it('should add error message only once when error occurs', () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
     const errorMessage =
       'Agent loop failed (Error): No available provider for model: glm-4.6. Please configure API keys in settings. Provider: unknown';
 
@@ -53,7 +61,7 @@ describe('ChatBox error handling - duplicate error message fix', () => {
   });
 
   it('should update existing assistant message with error without creating duplicate', () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
     const errorMessage = 'Stream processing failed: Connection timeout';
 
     // Simulate user message
@@ -87,7 +95,7 @@ describe('ChatBox error handling - duplicate error message fix', () => {
   });
 
   it('should handle provider configuration errors without duplication', () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
     const errorMessage = 'No available provider for model: glm-4.6. Please configure API keys';
 
     act(() => {
@@ -110,7 +118,7 @@ describe('ChatBox error handling - duplicate error message fix', () => {
   });
 
   it('should handle multiple error scenarios correctly', () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     // First conversation with error
     act(() => {
@@ -142,7 +150,7 @@ describe('ChatBox error handling - duplicate error message fix', () => {
   });
 
   it('should maintain correct message flow when error occurs mid-stream', () => {
-    const { result } = renderHook(() => useMessages());
+    const { result } = renderHook(() => useMessages(TEST_CONVERSATION_ID));
 
     act(() => {
       result.current.addMessage('user', 'Complex task', false);

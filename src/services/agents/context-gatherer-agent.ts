@@ -119,7 +119,7 @@ export class ContextGathererAgent {
       id: 'context-gatherer',
       name: 'Context Gatherer',
       description: 'Efficient single-task information gathering',
-      modelType: ModelType.SMALL,
+      modelType: ModelType.MAIN,
       version: ContextGathererAgent.VERSION,
       systemPrompt: ContextGatheringPromptTemplate,
       tools: selectedTools,

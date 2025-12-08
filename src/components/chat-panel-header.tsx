@@ -6,10 +6,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslation } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
 import { modelService } from '@/services/model-service';
-import { useAgentExecutionStore } from '@/stores/agent-execution-store';
 import { useConversationUsageStore } from '@/stores/conversation-usage-store';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useTaskExecutionStore } from '@/stores/task-execution-store';
 import { ChatHistory } from './chat-history';
 
 interface ChatPanelHeaderProps {
@@ -34,7 +34,7 @@ export function ChatPanelHeader({
   const t = useTranslation();
   const [modelName, setModelName] = useState<string>('');
   const { isPlanModeEnabled } = usePlanModeStore();
-  const { isAgentRunning } = useAgentExecutionStore();
+  const isMaxReached = useTaskExecutionStore((state) => state.isMaxReached());
   const { cost, inputTokens, outputTokens, contextUsage } = useConversationUsageStore();
 
   const formatTokens = (tokens: number): string => {
@@ -197,9 +197,10 @@ export function ChatPanelHeader({
           <TooltipTrigger asChild>
             <Button
               className="h-6 w-6 p-0 hover:bg-gray-200 dark:hover:bg-gray-700"
-              disabled={isAgentRunning}
+              disabled={isMaxReached}
               onClick={onNewChat}
               size="sm"
+              title={isMaxReached ? 'Maximum concurrent tasks reached' : undefined}
               variant="ghost"
             >
               <Plus className="h-3.5 w-3.5" />

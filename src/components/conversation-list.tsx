@@ -8,6 +8,8 @@ interface ConversationListProps {
   loading: boolean;
   editingId: string | null;
   editingTitle: string;
+  /** IDs of currently running tasks/conversations */
+  runningTaskIds?: string[];
   onConversationSelect: (conversationId: string) => void;
   onDeleteConversation: (conversationId: string, e?: React.MouseEvent) => void;
   onStartEditing: (conversation: Conversation, e?: React.MouseEvent) => void;
@@ -22,6 +24,7 @@ export function ConversationList({
   loading,
   editingId,
   editingTitle,
+  runningTaskIds = [],
   onConversationSelect,
   onDeleteConversation,
   onStartEditing,
@@ -57,6 +60,7 @@ export function ConversationList({
             conversation={conversation}
             editingTitle={editingTitle}
             isEditing={editingId === conversation.id}
+            isRunning={runningTaskIds.includes(conversation.id)}
             isSelected={currentConversationId === conversation.id}
             onCancelEdit={onCancelEdit}
             onDelete={onDeleteConversation}
