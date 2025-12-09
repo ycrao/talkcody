@@ -10,10 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useConversations } from '@/hooks/use-conversations';
 import { useProjects } from '@/hooks/use-projects';
+import { useTasks } from '@/hooks/use-tasks';
 import { cn } from '@/lib/utils';
-import { useTaskExecutionStore } from '@/stores/task-execution-store';
+import { useExecutionStore } from '@/stores/execution-store';
 import { ConversationList } from './conversation-list';
 
 interface ChatHistorySidebarProps {
@@ -33,8 +33,8 @@ export function ChatHistorySidebar({
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all');
   const [isCollapsed, setIsCollapsed] = useState(false);
   // Use selectors to avoid re-rendering on every streaming chunk
-  const runningTaskIds = useTaskExecutionStore(useShallow((state) => state.getRunningTaskIds()));
-  const isMaxReached = useTaskExecutionStore((state) => state.isMaxReached());
+  const runningTaskIds = useExecutionStore(useShallow((state) => state.getRunningTaskIds()));
+  const isMaxReached = useExecutionStore((state) => state.isMaxReached());
 
   const {
     conversations,
@@ -42,13 +42,13 @@ export function ChatHistorySidebar({
     editingId,
     editingTitle,
     setEditingTitle,
-    loadConversations,
+    loadTasks: loadConversations,
     deleteConversation,
     finishEditing,
     startEditing,
     cancelEditing,
     selectConversation,
-  } = useConversations();
+  } = useTasks();
 
   const { projects } = useProjects();
 

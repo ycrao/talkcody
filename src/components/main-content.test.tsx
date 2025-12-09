@@ -39,15 +39,14 @@ vi.mock('@/pages/logs-page', () => ({
 }));
 
 describe('MainContent - State Persistence on Page Switch', () => {
-  it('should render all pages in the DOM but only show the active one', () => {
-    const { container } = render(<MainContent activeView={NavigationView.CHAT} />);
+  it('should render ExplorerPage and ChatOnlyPage in the DOM but only show the active one', () => {
+    render(<MainContent activeView={NavigationView.CHAT} />);
 
-    // Only ExplorerPage and ChatOnlyPage are always mounted (to preserve state)
-    // Other pages are lazy loaded - only rendered when active
+    // Only ExplorerPage and ChatOnlyPage are always in the DOM (kept mounted for state preservation)
     expect(screen.getByTestId('explorer-page')).toBeInTheDocument();
     expect(screen.getByTestId('chat-page')).toBeInTheDocument();
 
-    // Other pages should NOT be in the DOM when not active
+    // Other pages are lazy-loaded and should NOT be in the DOM when not active
     expect(screen.queryByTestId('projects-page')).not.toBeInTheDocument();
     expect(screen.queryByTestId('agent-marketplace-page')).not.toBeInTheDocument();
     expect(screen.queryByTestId('skills-marketplace-page')).not.toBeInTheDocument();
@@ -62,7 +61,7 @@ describe('MainContent - State Persistence on Page Switch', () => {
     expect(explorerPageContainer).toHaveClass('hidden');
   });
 
-  it('should keep all pages mounted when switching between views', () => {
+  it('should keep ExplorerPage and ChatOnlyPage mounted when switching between views', () => {
     const { rerender } = render(<MainContent activeView={NavigationView.CHAT} />);
 
     // Initially on chat page
@@ -114,20 +113,30 @@ describe('MainContent - State Persistence on Page Switch', () => {
   it('should correctly show each navigation view', () => {
     const { rerender, unmount } = render(<MainContent activeView={NavigationView.EXPLORER} />);
 
-    const views = [
+    // Always-mounted pages (ExplorerPage and ChatOnlyPage)
+    const alwaysMountedViews = [
       { view: NavigationView.EXPLORER, testId: 'explorer-page' },
       { view: NavigationView.CHAT, testId: 'chat-page' },
+    ];
+
+    for (const { view, testId } of alwaysMountedViews) {
+      rerender(<MainContent activeView={view} />);
+      const activePageContainer = screen.getByTestId(testId).parentElement;
+      expect(activePageContainer).not.toHaveClass('hidden');
+    }
+
+    // Lazy-loaded pages - rendered only when active
+    const lazyLoadedViews = [
       { view: NavigationView.PROJECTS, testId: 'projects-page' },
       { view: NavigationView.SKILLS_MARKETPLACE, testId: 'skills-marketplace-page' },
       { view: NavigationView.MCP_SERVERS, testId: 'mcp-servers-page' },
       { view: NavigationView.SETTINGS, testId: 'settings-page' },
     ];
 
-    for (const { view, testId } of views) {
+    for (const { view, testId } of lazyLoadedViews) {
       rerender(<MainContent activeView={view} />);
-
-      const activePageContainer = screen.getByTestId(testId).parentElement;
-      expect(activePageContainer).not.toHaveClass('hidden');
+      // Lazy-loaded pages should be present when active
+      expect(screen.getByTestId(testId)).toBeInTheDocument();
     }
 
     unmount();

@@ -1,5 +1,10 @@
 import type { ModelMessage } from 'ai';
 import { logger } from '@/lib/logger';
+import {
+  mergeConsecutiveAssistantMessages,
+  removeOrphanedToolMessages,
+} from '@/lib/message-convert';
+import { validateAnthropicMessages } from '@/lib/message-validate';
 import { GEMINI_25_FLASH_LITE, getContextLength } from '@/lib/models';
 import type {
   AgentLoopCallbacks,
@@ -10,9 +15,19 @@ import type {
   MessageCompactionOptions,
   UIMessage,
 } from '@/types/agent';
+import { MessageFilter } from './agents/message-filter';
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  fixedMessages?: ModelMessage[];
+}
 
 export class MessageCompactor {
-  private readonly COMPRESSION_TIMEOUT_MS = 30000; // 30 seconds timeout
+  private readonly COMPRESSION_TIMEOUT_MS = 120000; // 30 seconds timeout
+  private readonly MAX_SUMMARY_LENGTH = 8000; // Max chars for condensed summary
+  private readonly PRESERVE_TOOL_NAMES = ['exitPlanMode', 'todoWrite'];
+  private messageFilter: MessageFilter;
   private compressionStats = {
     totalCompressions: 0,
     totalTimeSaved: 0,
@@ -46,23 +61,222 @@ Please be comprehensive and technical in your summary. Include specific file pat
         abortController?: AbortController
       ) => Promise<void>;
     }
-  ) {}
+  ) {
+    this.messageFilter = new MessageFilter();
+  }
+
+  /**
+   * Adjusts the preserve boundary to avoid cutting tool-call/tool-result pairs.
+   * Scans backwards from the cut point to include any tool-calls that have
+   * matching tool-results in the preserved section.
+   */
+  private adjustPreserveBoundary(messages: ModelMessage[], preserveCount: number): number {
+    const cutIndex = messages.length - preserveCount;
+
+    if (cutIndex <= 0) return preserveCount;
+
+    // Collect tool-result IDs from preserved messages
+    const preservedToolResultIds = new Set<string>();
+    for (let i = cutIndex; i < messages.length; i++) {
+      const msg = messages[i];
+      if (!msg) continue;
+      if (msg.role === 'tool' && Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if (
+            typeof part === 'object' &&
+            part !== null &&
+            'type' in part &&
+            part.type === 'tool-result' &&
+            'toolCallId' in part
+          ) {
+            preservedToolResultIds.add(part.toolCallId as string);
+          }
+        }
+      }
+    }
+
+    if (preservedToolResultIds.size === 0) {
+      return preserveCount; // No tool results in preserved section
+    }
+
+    // Scan backwards to find tool-calls that match preserved tool-results
+    let adjustedCutIndex = cutIndex;
+    for (let i = cutIndex - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (!msg) continue;
+      if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+        let hasMatchingToolCall = false;
+        for (const part of msg.content) {
+          if (
+            typeof part === 'object' &&
+            part !== null &&
+            'type' in part &&
+            part.type === 'tool-call' &&
+            'toolCallId' in part &&
+            preservedToolResultIds.has(part.toolCallId as string)
+          ) {
+            hasMatchingToolCall = true;
+            break;
+          }
+        }
+        if (hasMatchingToolCall) {
+          adjustedCutIndex = i;
+          // Continue scanning - there might be more matching calls earlier
+        }
+      }
+    }
+
+    const adjustedPreserveCount = messages.length - adjustedCutIndex;
+
+    if (adjustedPreserveCount !== preserveCount) {
+      logger.info('Adjusted preserve boundary to avoid orphaned tool messages', {
+        originalPreserveCount: preserveCount,
+        adjustedPreserveCount,
+        reason: 'tool-call/tool-result pairing',
+      });
+    }
+
+    return adjustedPreserveCount;
+  }
+
+  /**
+   * Extracts the last occurrence of specified tool calls from messages.
+   * Returns remaining messages and extracted messages (with their tool-results).
+   */
+  private extractLastToolCalls(
+    messages: ModelMessage[],
+    toolNames: string[]
+  ): { remaining: ModelMessage[]; extracted: ModelMessage[] } {
+    const toolNamesToFind = new Set(toolNames);
+    const foundToolCallIds = new Map<string, string>(); // toolName -> toolCallId
+
+    // Scan backwards to find the last occurrence of each tool
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (!msg || msg.role !== 'assistant' || !Array.isArray(msg.content)) continue;
+
+      for (const part of msg.content) {
+        if (
+          typeof part === 'object' &&
+          part !== null &&
+          'type' in part &&
+          part.type === 'tool-call' &&
+          'toolName' in part &&
+          'toolCallId' in part
+        ) {
+          const toolName = part.toolName as string;
+          if (toolNamesToFind.has(toolName) && !foundToolCallIds.has(toolName)) {
+            foundToolCallIds.set(toolName, part.toolCallId as string);
+          }
+        }
+      }
+
+      // Stop early if we found all tools
+      if (foundToolCallIds.size === toolNamesToFind.size) break;
+    }
+
+    if (foundToolCallIds.size === 0) {
+      return { remaining: messages, extracted: [] };
+    }
+
+    const toolCallIdsToExtract = new Set(foundToolCallIds.values());
+    const extracted: ModelMessage[] = [];
+    const remaining: ModelMessage[] = [];
+
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+        const extractedParts: typeof msg.content = [];
+        const remainingParts: typeof msg.content = [];
+
+        for (const part of msg.content) {
+          if (
+            typeof part === 'object' &&
+            part !== null &&
+            'type' in part &&
+            part.type === 'tool-call' &&
+            'toolCallId' in part &&
+            toolCallIdsToExtract.has(part.toolCallId as string)
+          ) {
+            extractedParts.push(part);
+          } else {
+            remainingParts.push(part);
+          }
+        }
+
+        if (extractedParts.length > 0) {
+          extracted.push({ ...msg, content: extractedParts });
+        }
+        if (remainingParts.length > 0) {
+          remaining.push({ ...msg, content: remainingParts });
+        }
+      } else if (msg.role === 'tool' && Array.isArray(msg.content)) {
+        const extractedParts: typeof msg.content = [];
+        const remainingParts: typeof msg.content = [];
+
+        for (const part of msg.content) {
+          if (
+            typeof part === 'object' &&
+            part !== null &&
+            'type' in part &&
+            part.type === 'tool-result' &&
+            'toolCallId' in part &&
+            toolCallIdsToExtract.has(part.toolCallId as string)
+          ) {
+            extractedParts.push(part);
+          } else {
+            remainingParts.push(part);
+          }
+        }
+
+        if (extractedParts.length > 0) {
+          extracted.push({ ...msg, content: extractedParts });
+        }
+        if (remainingParts.length > 0) {
+          remaining.push({ ...msg, content: remainingParts });
+        }
+      } else {
+        remaining.push(msg);
+      }
+    }
+
+    if (extracted.length > 0) {
+      logger.info('Extracted critical tool calls for preservation', {
+        toolNames: [...foundToolCallIds.keys()],
+        extractedMessageCount: extracted.length,
+      });
+    }
+
+    return { remaining, extracted };
+  }
 
   public async compactMessages(
     options: MessageCompactionOptions,
     abortController?: AbortController
   ): Promise<CompressionResult> {
-    const { messages, config, systemPrompt } = options;
+    const { messages, config } = options;
 
     logger.info('Starting message compaction', {
       originalMessageCount: messages.length,
       preserveRecentMessages: config.preserveRecentMessages,
     });
 
+    // Step 1: Extract and preserve the original system message (systemPrompt)
+    // The first message is typically the system prompt, which should never be compressed
+    let originalSystemMessage: ModelMessage | null = null;
+    let messagesToProcess = messages;
+
+    if (messages[0]?.role === 'system') {
+      originalSystemMessage = messages[0];
+      messagesToProcess = messages.slice(1);
+      logger.info('Preserved original system message for compaction');
+    }
+
     // Determine which messages to compress and which to preserve
-    const preserveCount = Math.min(config.preserveRecentMessages, messages.length);
-    const preservedMessages = messages.slice(-preserveCount);
-    const messagesToCompress = messages.slice(0, messages.length - preserveCount);
+    // Use adjusted boundary to avoid cutting tool-call/tool-result pairs
+    const initialPreserveCount = Math.min(config.preserveRecentMessages, messagesToProcess.length);
+    const preserveCount = this.adjustPreserveBoundary(messagesToProcess, initialPreserveCount);
+    const recentPreservedMessages = messagesToProcess.slice(-preserveCount);
+    let messagesToCompress = messagesToProcess.slice(0, messagesToProcess.length - preserveCount);
 
     if (messagesToCompress.length === 0) {
       logger.info('No messages to compress, returning original messages');
@@ -76,6 +290,38 @@ Please be comprehensive and technical in your summary. Include specific file pat
       };
     }
 
+    // Extract critical tool calls (exitPlanMode, todoWrite) for preservation
+    const { remaining: afterExtraction, extracted: criticalToolMessages } =
+      this.extractLastToolCalls(messagesToCompress, this.PRESERVE_TOOL_NAMES);
+    messagesToCompress = afterExtraction;
+
+    // Apply message filter to remove duplicate file reads and outdated exploratory tools
+    messagesToCompress = this.messageFilter.filterMessages(messagesToCompress);
+
+    // Combine extracted critical tool messages with recent preserved messages
+    let preservedMessages = [...criticalToolMessages, ...recentPreservedMessages];
+
+    // Step 2: Prepend the original system message to preserved messages
+    // Note: We no longer need to move user messages to preserved because:
+    // 1. The compression process will create a summary user message
+    // 2. This ensures there's always a user message in the final result
+    // 3. All original messages (including user messages) can be compressed together
+    if (originalSystemMessage) {
+      preservedMessages = [originalSystemMessage, ...preservedMessages];
+    }
+
+    if (messagesToCompress.length === 0) {
+      logger.info('No messages to compress after filtering, returning preserved messages');
+      return {
+        compressedSummary: '',
+        sections: [],
+        preservedMessages,
+        originalMessageCount: messages.length,
+        compressedMessageCount: preservedMessages.length,
+        compressionRatio: preservedMessages.length / messages.length,
+      };
+    }
+
     // Convert messages to text for compression
     const conversationHistory = this.messagesToText(messagesToCompress);
 
@@ -83,7 +329,6 @@ Please be comprehensive and technical in your summary. Include specific file pat
     const compressedSummary = await this.performCompression(
       conversationHistory,
       config.compressionModel,
-      systemPrompt,
       abortController
     );
 
@@ -152,7 +397,6 @@ Please be comprehensive and technical in your summary. Include specific file pat
   private async performCompression(
     conversationHistory: string,
     model: string,
-    systemPrompt?: string,
     abortController?: AbortController
   ): Promise<string> {
     return new Promise<string>((resolve, reject) => {
@@ -168,10 +412,7 @@ Please be comprehensive and technical in your summary. Include specific file pat
         reject(timeoutError);
       }, this.COMPRESSION_TIMEOUT_MS);
 
-      // Prepare compression prompt
-      const compressionPrompt = `${MessageCompactor.COMPRESSION_PROMPT}
-
-CONVERSATION HISTORY TO SUMMARIZE:
+      const history = `CONVERSATION HISTORY TO SUMMARIZE:
 ${conversationHistory}
 
 Please provide a comprehensive structured summary following the 8-section format above.`;
@@ -180,7 +421,7 @@ Please provide a comprehensive structured summary following the 8-section format
         {
           id: 'compression-request',
           role: 'user',
-          content: compressionPrompt,
+          content: history,
           timestamp: new Date(),
         },
       ];
@@ -189,9 +430,7 @@ Please provide a comprehensive structured summary following the 8-section format
         {
           messages: compressionMessages,
           model: model || GEMINI_25_FLASH_LITE,
-          systemPrompt:
-            systemPrompt ||
-            'You are an expert at creating detailed technical summaries that preserve all essential context for software development work.',
+          systemPrompt: MessageCompactor.COMPRESSION_PROMPT,
           tools: {}, // No tools needed for compression
           maxIterations: 1, // Single response for compression
         },
@@ -316,19 +555,152 @@ Please provide a comprehensive structured summary following the 8-section format
     return false;
   }
 
+  /**
+   * Validates compressed messages to ensure no orphaned tool-calls or tool-results.
+   * Returns validation result with optional auto-fixed messages.
+   * Delegates to message-validate module for validation.
+   */
+  public validateCompressedMessages(messages: ModelMessage[]): ValidationResult {
+    // Use the new validation module
+    const anthropicValidation = validateAnthropicMessages(messages);
+
+    if (anthropicValidation.valid) {
+      return { valid: true, errors: [] };
+    }
+
+    // Convert validation issues to error strings for backward compatibility
+    const errors = anthropicValidation.issues.map((issue) => issue.message);
+
+    // Try to fix using the new conversion module
+    const fixedMessages = this.fixOrphanedMessages(messages);
+
+    logger.warn('Compressed messages validation failed', { errors });
+
+    return { valid: false, errors, fixedMessages };
+  }
+
+  /**
+   * Removes orphaned tool messages and fixes consecutive assistant messages.
+   * Delegates to message-convert module for fixing.
+   */
+  private fixOrphanedMessages(messages: ModelMessage[]): ModelMessage[] {
+    // Step 1: Remove orphaned tool messages
+    let result = removeOrphanedToolMessages(messages);
+
+    // Step 2: Merge consecutive assistant messages
+    result = mergeConsecutiveAssistantMessages(result);
+
+    return result;
+  }
+
+  /**
+   * Condenses a previous summary to avoid unbounded growth.
+   * Extracts key sections and limits total length.
+   */
+  private condensePreviousSummary(summary: string): string {
+    if (summary.length <= this.MAX_SUMMARY_LENGTH) {
+      return summary;
+    }
+
+    // Try to extract key sections
+    const importantSections = ['Pending Tasks', 'Current Work', 'Errors and fixes'];
+    let condensed = '';
+
+    for (const section of importantSections) {
+      const pattern = new RegExp(`\\d+\\.\\s*${section}[:\\s]([\\s\\S]*?)(?=\\n\\d+\\.|$)`, 'i');
+      const match = summary.match(pattern);
+      if (match?.[1]) {
+        const sectionContent = match[1].trim().slice(0, 500);
+        condensed += `${section}: ${sectionContent}\n\n`;
+      }
+    }
+
+    if (condensed.length > 0) {
+      logger.info('Condensed previous summary', {
+        originalLength: summary.length,
+        condensedLength: condensed.length,
+      });
+      return condensed;
+    }
+
+    // Fallback: truncate with ellipsis
+    return summary.slice(0, this.MAX_SUMMARY_LENGTH) + '...';
+  }
+
   public createCompressedMessages(result: CompressionResult): ModelMessage[] {
     const compressedMessages: ModelMessage[] = [];
+    let startIndex = 0;
 
+    // Step 1: Preserve the original system message (systemPrompt) if it exists
+    const firstPreserved = result.preservedMessages[0];
+    if (firstPreserved?.role === 'system') {
+      // Check if this is the original systemPrompt (not a previous summary)
+      const isOriginalSystemPrompt =
+        typeof firstPreserved.content === 'string' &&
+        !firstPreserved.content.includes('[Previous conversation summary]');
+
+      if (isOriginalSystemPrompt) {
+        compressedMessages.push(firstPreserved);
+        startIndex = 1;
+      }
+    }
+
+    // Step 2: If we have a compressed summary, add it as a user message
+    // This follows the Aider pattern where summaries are presented as user context
     if (result.compressedSummary) {
-      // Add the compressed summary as a system message
+      // Check if there's an old summary (from previous compression) that needs condensing
+      let summaryContent = result.compressedSummary;
+
+      // Look for any old system summary messages that should be condensed
+      for (let i = startIndex; i < result.preservedMessages.length; i++) {
+        const msg = result.preservedMessages[i];
+        if (
+          msg?.role === 'system' &&
+          typeof msg.content === 'string' &&
+          msg.content.includes('[Previous conversation summary]')
+        ) {
+          // Condense the old summary and include it
+          const condensedPrevious = this.condensePreviousSummary(msg.content);
+          summaryContent = `${result.compressedSummary}\n\n---\nEarlier context (condensed):\n${condensedPrevious}`;
+          break;
+        }
+      }
+
+      // Add summary as user message (critical for LLM APIs that require user messages)
       compressedMessages.push({
-        role: 'system',
-        content: `Previous conversation summary:\n\n${result.compressedSummary}`,
+        role: 'user',
+        content: `[Previous conversation summary]\n\n${summaryContent}\n\nPlease continue from where we left off.`,
+      });
+
+      // Add assistant acknowledgment to maintain message alternation
+      compressedMessages.push({
+        role: 'assistant',
+        content: 'I understand the previous context. Continuing with the task.',
       });
     }
 
-    // Add preserved recent messages
-    compressedMessages.push(...result.preservedMessages);
+    // Step 3: Add remaining preserved messages (skip system messages that are summaries)
+    for (let i = startIndex; i < result.preservedMessages.length; i++) {
+      const msg = result.preservedMessages[i];
+      if (!msg) continue;
+
+      // Skip old system summaries (they've been condensed above)
+      if (
+        msg.role === 'system' &&
+        typeof msg.content === 'string' &&
+        msg.content.includes('[Previous conversation summary]')
+      ) {
+        continue;
+      }
+
+      compressedMessages.push(msg);
+    }
+
+    logger.info('Created compressed messages', {
+      totalMessages: compressedMessages.length,
+      hasSystemPrompt: startIndex === 1,
+      hasSummary: !!result.compressedSummary,
+    });
 
     return compressedMessages;
   }

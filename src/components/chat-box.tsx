@@ -11,21 +11,23 @@ import {
   useState,
 } from 'react';
 import { toast } from 'sonner';
-import { useConversations } from '@/hooks/use-conversations';
-import { useMessages } from '@/hooks/use-messages';
+import { useShallow } from 'zustand/react/shallow';
+import { useMessages } from '@/hooks/use-task';
+import { useTasks } from '@/hooks/use-tasks';
 import { logger } from '@/lib/logger';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
 import { agentRegistry } from '@/services/agents/agent-registry';
-import { type AgentLoopConfig, createLLMService } from '@/services/agents/llm-service';
 import { commandExecutor } from '@/services/commands/command-executor';
 import { databaseService } from '@/services/database-service';
+import { executionService } from '@/services/execution-service';
+import { messageService } from '@/services/message-service';
 import { modelService } from '@/services/model-service';
 import { previewSystemPrompt } from '@/services/prompt/preview';
 import { getValidatedWorkspaceRoot } from '@/services/workspace-root-service';
-import { useMessagesStore } from '@/stores/messages-store';
+import { useExecutionStore } from '@/stores/execution-store';
 import { settingsManager, useSettingsStore } from '@/stores/settings-store';
-import { useTaskExecutionStore } from '@/stores/task-execution-store';
+import { useTaskStore } from '@/stores/task-store';
 import type { MessageAttachment, UIMessage } from '@/types/agent';
 import type { Command, CommandContext, CommandResult } from '@/types/command';
 import {
@@ -77,8 +79,6 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
   ) => {
     const [input, setInput] = useState('');
     const chatInputRef = useRef<ChatInputRef>(null);
-    // Per-task abort controllers - keyed by conversationId for proper concurrent task isolation
-    const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
     const activeConversationIdRef = useRef<string | undefined>(undefined);
     // Ref to track the currently displayed conversationId (from props) for background task UI isolation
     const displayedConversationIdRef = useRef<string | undefined>(conversationId);
@@ -87,38 +87,33 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
 
     // Derive loading state from TaskExecutionStore (instead of local state)
     // This ensures correct state when switching between conversations
-    const isLoading = useTaskExecutionStore((state) =>
-      conversationId ? state.isTaskRunning(conversationId) : false
-    );
-    const serverStatus = useTaskExecutionStore((state) =>
-      conversationId ? (state.getExecution(conversationId)?.serverStatus ?? '') : ''
+    // Using useShallow to combine subscriptions and reduce re-renders
+    const { isLoading, serverStatus, error } = useExecutionStore(
+      useShallow((state) => {
+        if (!conversationId) return { isLoading: false, serverStatus: '', error: undefined };
+        const execution = state.getExecution(conversationId);
+        return {
+          isLoading: state.isTaskRunning(conversationId),
+          serverStatus: execution?.serverStatus ?? '',
+          error: execution?.error,
+        };
+      })
     );
     const status: ChatStatus = isLoading ? 'streaming' : 'ready';
-
-    // Get store for actions (not reactive)
-    const taskExecutionStore = useTaskExecutionStore.getState();
 
     // useConversations first to get currentConversationId
     const {
       currentConversationId,
       setCurrentConversationId,
       setError,
-      loadConversation,
+      loadTask,
       createConversation,
-      saveMessage,
-      clearConversation,
       getConversationDetails,
-    } = useConversations(conversationId, onConversationStart);
+    } = useTasks(onConversationStart);
 
     // useMessages with conversationId for per-conversation message caching
-    const {
-      messages,
-      clearMessages,
-      stopStreaming,
-      deleteMessage,
-      deleteMessagesFromIndex,
-      findMessageIndex,
-    } = useMessages(currentConversationId);
+    const { messages, stopStreaming, deleteMessage, deleteMessagesFromIndex, findMessageIndex } =
+      useMessages(currentConversationId);
 
     // Handle input changes
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -159,85 +154,34 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
 
     useEffect(() => {
       const handleConversationLoad = async () => {
-        // Note: Removed !isLoading condition to allow switching conversations
-        // even when another task is running (parallel task support)
+        logger.info('[ChatBox] Loading conversation:', conversationId, currentConversationId);
         if (conversationId && conversationId !== currentConversationId) {
-          const taskStore = useTaskExecutionStore.getState();
-          const messagesStore = useMessagesStore.getState();
+          const taskStore = useTaskStore.getState();
 
-          // Running task: use memory messages (preserve runtime state like renderDoingUI)
-          // Finished task: load from database
-          const isTargetTaskRunning = taskStore.isTaskRunning(conversationId);
-          const hasMessagesInMemory = messagesStore.getMessages(conversationId).length > 0;
+          // Check if messages exist in memory
+          const hasMessagesInMemory = taskStore.getMessages(conversationId).length > 0;
 
-          if (isTargetTaskRunning && hasMessagesInMemory) {
-            // Running task with existing memory data, don't reload from DB
-            // This preserves runtime state like renderDoingUI for tool doing UI
-            logger.info('[ChatBox] Skipping DB load for running task with existing messages', {
+          if (hasMessagesInMemory) {
+            // Messages exist in memory, don't reload from DB to avoid overwriting
+            // This preserves user messages that were just added but not yet persisted
+            logger.info('[ChatBox] Skipping DB load - messages exist in memory', {
               conversationId,
             });
             // Still need to update currentConversationId for UI to switch
             setCurrentConversationId(conversationId);
           } else {
-            // Finished task or first load, fetch from database
-            await loadConversation(conversationId, 0, (loadedMessages) => {
-              messagesStore.setMessages(conversationId, loadedMessages);
-            });
+            // No messages in memory, fetch from database
+            // Note: loadTask already calls taskStore.setMessages via taskService.loadMessages
+            await loadTask(conversationId);
           }
-        } else if (!conversationId && currentConversationId) {
-          clearMessages();
-          clearConversation();
         }
       };
 
       handleConversationLoad();
-    }, [
-      conversationId,
-      currentConversationId,
-      clearConversation,
-      clearMessages,
-      loadConversation,
-      setCurrentConversationId,
-    ]);
-
-    // Subscribe to execution state for streaming content sync
-    const currentExecution = useTaskExecutionStore((state) =>
-      conversationId ? state.getExecution(conversationId) : undefined
-    );
+    }, [conversationId, currentConversationId, loadTask, setCurrentConversationId]);
 
     // Note: State sync effect removed - isLoading and serverStatus now derived from store
-
-    // Real-time streaming content sync from store
-    // This updates the UI when streaming content changes in the store (e.g., from background task)
-    // Note: We no longer create missing messages here - messages are always created by handleAssistantMessageStart
-    // biome-ignore lint/correctness/useExhaustiveDependencies: We intentionally use streamingContent to only re-run when streaming content changes
-    useEffect(() => {
-      if (!conversationId || !currentExecution) return;
-      if (currentExecution.status !== 'running' || !currentExecution.streamingContent) return;
-
-      // Find a streaming assistant message to update
-      // Note: The last message might be a tool message, so we search backwards
-      const messagesStoreState = useMessagesStore.getState();
-      const streamingMessage = [...messages]
-        .reverse()
-        .find((msg) => msg.role === 'assistant' && msg.isStreaming);
-
-      if (streamingMessage) {
-        // Update existing streaming message if content has changed
-        const currentContent =
-          typeof streamingMessage.content === 'string' ? streamingMessage.content : '';
-        if (currentContent !== currentExecution.streamingContent) {
-          messagesStoreState.updateMessageContent(
-            conversationId,
-            streamingMessage.id,
-            currentExecution.streamingContent,
-            true
-          );
-        }
-      }
-      // If no streaming message exists, don't create one here
-      // The task's handleAssistantMessageStart will create it
-    }, [conversationId, currentExecution?.streamingContent, messages]);
+    // Note: Streaming content sync effect removed - executionService handles message updates
 
     const processMessage = async (
       userMessage: string,
@@ -286,15 +230,6 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
         return;
       }
 
-      // Start task execution tracking (for parallel task support)
-      // This will set isLoading=true in the store
-      const startResult = taskExecutionStore.startExecution(activeConversationId);
-      if (!startResult.success) {
-        logger.warn('Failed to start task execution:', startResult.error);
-        toast.error(startResult.error || 'Failed to start task');
-        return;
-      }
-
       // Store conversation ID in ref for handleToolMessage to access
       activeConversationIdRef.current = activeConversationId;
 
@@ -320,20 +255,12 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
           attachments,
         };
 
-        // Use store directly with activeConversationId (not hook's addMessage)
-        // This is necessary because the hook is bound to currentConversationId which
-        // may be undefined when creating a new conversation
-        useMessagesStore.getState().addMessage(activeConversationId, 'user', userMessage, {
-          isStreaming: false,
-          assistantId: agentId,
+        logger.info('Adding user message to conversation:', activeConversationId, userMessage);
+        await messageService.addUserMessage(activeConversationId, userMessage, {
           attachments,
+          agentId,
         });
-        await saveMessage(activeConversationId, 'user', userMessage, 0, agentId, attachments);
       }
-
-      const abortController = new AbortController();
-      // Store abort controller per conversation for concurrent task support
-      abortControllersRef.current.set(activeConversationId, abortController);
 
       try {
         // Generate text response
@@ -377,26 +304,18 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
         const tools = agent?.tools ?? {};
         logger.info('Using tools:', Object.keys(tools));
 
-        // Create a new LLMService instance for this task (supports parallel execution)
-        const taskLLMService = createLLMService(activeConversationId);
-
-        // Use the new simplified runAgentLoopWithPersist method
-        // All state updates are now handled internally via MessagesStore
-        const config: AgentLoopConfig = {
-          conversationId: activeConversationId,
-          messages: conversationHistory,
-          model,
-          systemPrompt,
-          tools,
-          isThink: true,
-          suppressReasoning: false,
-          agentId,
-          isNewConversation,
-          userMessage,
-        };
-
-        await taskLLMService.runAgentLoopWithPersist(
-          config,
+        // Use executionService for proper message persistence
+        await executionService.startExecution(
+          {
+            taskId: activeConversationId,
+            messages: conversationHistory,
+            model,
+            systemPrompt,
+            tools,
+            agentId,
+            isNewTask: isNewConversation,
+            userMessage,
+          },
           {
             onComplete: (result) => {
               onResponseReceived?.(result.fullText);
@@ -407,8 +326,7 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
               setError(errorMessage);
               onError?.(errorMessage);
             },
-          },
-          abortController
+          }
         );
 
         if (activeConversationId) {
@@ -419,7 +337,7 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
           }
         }
       } catch (error) {
-        if (abortController.signal.aborted) return;
+        // executionService handles abort internally, so errors here are real errors
         const errorMessage =
           error instanceof Error
             ? error.message
@@ -432,12 +350,10 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
         onError?.(errorMessage);
       } finally {
         // Stop task execution if still running (e.g., on error)
-        // This will automatically update isLoading via store derivation
-        if (activeConversationId && taskExecutionStore.isTaskRunning(activeConversationId)) {
-          taskExecutionStore.stopExecution(activeConversationId);
+        // executionService handles its own cleanup
+        if (activeConversationId && executionService.isRunning(activeConversationId)) {
+          executionService.stopExecution(activeConversationId);
         }
-        // Clean up abort controller for this conversation
-        abortControllersRef.current.delete(activeConversationId);
       }
     };
 
@@ -539,20 +455,13 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
     };
 
     const stopGeneration = () => {
-      // Use conversationId prop (not ref) to get the correct abort controller
-      // This ensures we stop the task for the currently displayed conversation
+      // Use conversationId prop to stop the currently displayed conversation
       const taskId = conversationId;
       if (taskId) {
-        const controller = abortControllersRef.current.get(taskId);
-        if (controller) {
-          controller.abort();
-          abortControllersRef.current.delete(taskId);
-        }
         stopStreaming();
-
-        // Stop the task execution in store
-        if (taskExecutionStore.isTaskRunning(taskId)) {
-          taskExecutionStore.stopExecution(taskId);
+        // executionService handles abort controller and store updates
+        if (executionService.isRunning(taskId)) {
+          executionService.stopExecution(taskId);
         }
       }
     };
@@ -627,18 +536,18 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
               repositoryPath={repositoryPath}
             />
 
-            {isLoading && (
+            {(isLoading || error) && (
               <div
                 className={`mx-auto my-6 flex w-1/2 items-center justify-center text-md ${
-                  serverStatus.startsWith('Error:')
+                  error || serverStatus.startsWith('Error:')
                     ? 'text-red-600 dark:text-red-400'
                     : 'text-blue-800 dark:text-blue-200'
                 }`}
               >
-                {!serverStatus.startsWith('Error:') && (
+                {!error && !serverStatus.startsWith('Error:') && (
                   <LoaderCircle className="mr-2 size-5 animate-spin" />
                 )}
-                <div>{serverStatus}</div>
+                <div>{error || serverStatus}</div>
               </div>
             )}
           </ConversationContent>

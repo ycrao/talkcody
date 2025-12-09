@@ -1,6 +1,7 @@
 // src/services/agents/llm-service.ts
 import {
   type AssistantModelMessage,
+  smoothStream,
   stepCountIs,
   streamText,
   type ToolModelMessage,
@@ -9,21 +10,19 @@ import {
 import { createErrorContext, extractAndFormatError } from '@/lib/error-utils';
 import { convertMessages } from '@/lib/llm-utils';
 import { logger } from '@/lib/logger';
+import { convertToAnthropicFormat } from '@/lib/message-convert';
 import { MessageTransform } from '@/lib/message-transform';
+import { validateAnthropicMessages } from '@/lib/message-validate';
 import { getContextLength } from '@/lib/models';
 import { getToolSync } from '@/lib/tools';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
-import { ConversationManager } from '@/services/conversation-manager';
 import { modelService } from '@/services/model-service';
 import { modelTypeService } from '@/services/model-type-service';
-import { notificationService } from '@/services/notification-service';
 import { getValidatedWorkspaceRoot } from '@/services/workspace-root-service';
-import { useConversationUsageStore } from '@/stores/conversation-usage-store';
-import { useMessagesStore } from '@/stores/messages-store';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { useTaskExecutionStore } from '@/stores/task-execution-store';
+import { useTaskStore } from '@/stores/task-store';
 import { ModelType } from '@/types/model-types';
 import type {
   AgentLoopOptions,
@@ -35,26 +34,24 @@ import type {
 import { aiPricingService } from '../ai-pricing-service';
 
 /**
- * Extended options for agent loop with persistence support
+ * Callbacks for agent loop
+ * NOTE: Persistence is now handled by ExecutionService, not LLMService
  */
-export interface AgentLoopConfig extends AgentLoopOptions {
-  /** Conversation ID (required for state persistence) */
-  conversationId: string;
-  /** Whether this is a new conversation (for title generation) */
-  isNewConversation?: boolean;
-  /** Original user message (for title generation) */
-  userMessage?: string;
-}
-
-/**
- * Simplified callbacks for agent loop
- * Most state updates are now handled internally via MessagesStore
- */
-export interface SimplifiedCallbacks {
+export interface AgentLoopCallbacks {
+  /** Called when text streaming starts */
+  onAssistantMessageStart?: () => void;
+  /** Called for each text chunk during streaming */
+  onChunk: (chunk: string) => void;
   /** Called when the agent loop completes successfully */
-  onComplete?: (result: { success: boolean; fullText: string }) => void;
+  onComplete?: (fullText: string) => void;
   /** Called when an error occurs */
   onError?: (error: Error) => void;
+  /** Called when status changes (e.g., "Thinking...", "Executing tool...") */
+  onStatus?: (status: string) => void;
+  /** Called when a tool message is generated */
+  onToolMessage?: (message: UIMessage) => void;
+  /** Called when an attachment is generated (e.g., images) */
+  onAttachment?: (attachment: MessageAttachment) => void;
 }
 
 import { aiProviderService } from '../ai-provider-service';
@@ -120,17 +117,9 @@ export class LLMService {
 
   async runAgentLoop(
     options: AgentLoopOptions,
-    callbacks: {
-      onChunk: (chunk: string) => void;
-      onComplete?: (fullText: string) => void;
-      onError?: (error: Error) => void;
-      onStatus?: (status: string) => void;
-      onToolMessage?: (message: UIMessage) => void;
-      onAssistantMessageStart?: () => void;
-      onAttachment?: (attachment: MessageAttachment) => void;
-    },
+    callbacks: AgentLoopCallbacks,
     abortController?: AbortController,
-    conversationId?: string
+    taskId?: string
   ): Promise<void> {
     // biome-ignore lint/suspicious/noAsyncPromiseExecutor: Complex agent loop requires async Promise executor
     return new Promise<void>(async (resolve, reject) => {
@@ -147,7 +136,7 @@ export class LLMService {
       logger.info('Starting agent loop', {
         model: options.model,
         maxIterations: options.maxIterations,
-        conversationId: conversationId || 'nested',
+        taskId: taskId || 'nested',
       });
 
       try {
@@ -179,10 +168,10 @@ export class LLMService {
         const t = this.getTranslations();
         onStatus?.(t.LLMService.status.initializing);
 
-        // Clear file changes from previous agent loop for this conversation
-        if (conversationId && conversationId !== 'nested') {
+        // Clear file changes from previous agent loop for this task
+        if (taskId && taskId !== 'nested') {
           const { useFileChangesStore } = await import('@/stores/file-changes-store');
-          useFileChangesStore.getState().clearConversation(conversationId);
+          useFileChangesStore.getState().clearConversation(taskId);
         }
 
         const isAvailable = modelService.isModelAvailableSync(model);
@@ -216,7 +205,18 @@ export class LLMService {
           rootPath,
           systemPrompt,
         });
-        loopState.messages = modelMessages;
+
+        // Validate and convert to Anthropic-compliant format
+        const validationResult = validateAnthropicMessages(modelMessages);
+        if (!validationResult.valid) {
+          logger.warn('[LLMService] Initial message validation issues:', {
+            issues: validationResult.issues,
+          });
+        }
+        loopState.messages = convertToAnthropicFormat(modelMessages, {
+          autoFix: true,
+          trimAssistantWhitespace: true,
+        });
 
         // Reset stream processor for new agent loop to ensure clean state
         // This prevents content from previous conversations leaking into new ones
@@ -283,9 +283,6 @@ export class LLMService {
           // This is critical for multi-iteration scenarios (e.g., text -> tool call -> text)
           this.streamProcessor.resetState();
 
-          // TODO: enable message filtering
-          // loopState.messages = this.messageFilter.filterMessages(loopState.messages);
-
           // Check if message compression is needed
           if (
             this.messageCompactor.shouldCompress(
@@ -312,14 +309,50 @@ export class LLMService {
                 abortController
               );
 
-              // Replace message history with compressed version
-              loopState.messages =
+              // Create compressed messages
+              const compressedMessages =
                 this.messageCompactor.createCompressedMessages(compressionResult);
+
+              // Validate compressed messages to catch orphaned tool-calls/results
+              const validation =
+                this.messageCompactor.validateCompressedMessages(compressedMessages);
+
+              if (!validation.valid) {
+                logger.warn('Compressed messages validation failed', {
+                  errors: validation.errors,
+                });
+
+                if (validation.fixedMessages) {
+                  // Apply Anthropic format conversion to fixed messages
+                  loopState.messages = convertToAnthropicFormat(validation.fixedMessages, {
+                    autoFix: true,
+                    trimAssistantWhitespace: true,
+                  });
+                  logger.info('Applied auto-fix for compressed messages', {
+                    originalCount: compressedMessages.length,
+                    fixedCount: loopState.messages.length,
+                  });
+                } else {
+                  // Apply Anthropic format conversion to compressed messages
+                  loopState.messages = convertToAnthropicFormat(compressedMessages, {
+                    autoFix: true,
+                    trimAssistantWhitespace: true,
+                  });
+                  logger.warn('No auto-fix available, applied Anthropic format conversion');
+                }
+              } else {
+                // Apply Anthropic format conversion to validated compressed messages
+                loopState.messages = convertToAnthropicFormat(compressedMessages, {
+                  autoFix: true,
+                  trimAssistantWhitespace: true,
+                });
+              }
 
               logger.info('Message compression completed', {
                 originalCount: compressionResult.originalMessageCount,
                 compressedCount: compressionResult.compressedMessageCount,
                 ratio: compressionResult.compressionRatio,
+                validationPassed: validation.valid,
               });
 
               onStatus?.(
@@ -407,6 +440,10 @@ export class LLMService {
                 model: providerModel,
                 messages: loopState.messages,
                 stopWhen: stepCountIs(1),
+                experimental_transform: smoothStream({
+                  delayInMs: 30, // optional: defaults to 10ms
+                  chunking: 'line', // optional: defaults to 'word'
+                }),
                 providerOptions,
                 onFinish: async ({ finishReason, usage, steps, totalUsage, response, request }) => {
                   const requestDuration = Date.now() - requestStartTime;
@@ -415,15 +452,17 @@ export class LLMService {
                     loopState.lastRequestTokens = totalUsage.totalTokens;
                   }
 
-                  // Update conversation usage for UI display
-                  if (usage && conversationId && conversationId !== 'nested') {
+                  // Update task usage for UI display
+                  if (usage && taskId && taskId !== 'nested') {
                     const inputTokens = usage.inputTokens || 0;
                     const outputTokens = usage.outputTokens || 0;
                     const cost = aiPricingService.calculateCost(model, {
                       inputTokens,
                       outputTokens,
                     });
-                    useConversationUsageStore.getState().addUsage(cost, inputTokens, outputTokens);
+                    useTaskStore
+                      .getState()
+                      .updateTaskUsage(taskId, cost, inputTokens, outputTokens);
 
                     // Calculate and update context usage percentage
                     if (loopState.lastRequestTokens > 0) {
@@ -432,7 +471,7 @@ export class LLMService {
                         100,
                         (loopState.lastRequestTokens / maxContextTokens) * 100
                       );
-                      useConversationUsageStore.getState().setContextUsage(contextUsage);
+                      useTaskStore.getState().setContextUsage(taskId, contextUsage);
                     }
                   }
 
@@ -879,153 +918,6 @@ export class LLMService {
         reject(loopError);
       }
     });
-  }
-
-  /**
-   * Run agent loop with automatic state persistence via MessagesStore.
-   * This is the preferred method for new code - it handles all state updates internally.
-   *
-   * @param config Extended options including conversationId
-   * @param callbacks Simplified callbacks (only onComplete and onError)
-   * @param abortController Optional abort controller for cancellation
-   */
-  async runAgentLoopWithPersist(
-    config: AgentLoopConfig,
-    callbacks: SimplifiedCallbacks,
-    abortController?: AbortController
-  ): Promise<void> {
-    const { conversationId, isNewConversation, userMessage, ...options } = config;
-    const { onComplete, onError } = callbacks;
-
-    const messagesStore = useMessagesStore.getState();
-    const taskStore = useTaskExecutionStore.getState();
-    let currentMessageId = '';
-    let streamedContent = '';
-
-    // Internal callbacks that operate on MessagesStore directly
-    const internalCallbacks = {
-      onChunk: (chunk: string) => {
-        if (abortController?.signal.aborted) return;
-        streamedContent += chunk;
-        messagesStore.updateStreamingContent(conversationId, currentMessageId, streamedContent);
-      },
-
-      onComplete: async (fullText: string) => {
-        if (abortController?.signal.aborted) return;
-
-        // Finalize the last message
-        if (currentMessageId && streamedContent) {
-          await messagesStore.finalizeMessageAndPersist(
-            conversationId,
-            currentMessageId,
-            streamedContent
-          );
-          // Reset after finalization to prevent stale state
-          streamedContent = '';
-        }
-
-        // Post-processing
-        await this.handlePostProcessing(conversationId, isNewConversation, userMessage);
-
-        // Call external callback
-        onComplete?.({ success: true, fullText });
-      },
-
-      onError: (error: Error) => {
-        logger.error('Agent loop error (with persist)', error);
-        if (abortController?.signal.aborted) return;
-
-        taskStore.setError(conversationId, error.message);
-        onError?.(error);
-      },
-
-      onStatus: (status: string) => {
-        if (abortController?.signal.aborted) return;
-        taskStore.setServerStatus(conversationId, status);
-      },
-
-      onToolMessage: async (message: UIMessage) => {
-        if (abortController?.signal.aborted) return;
-        await messagesStore.addToolMessageAndPersist(conversationId, message);
-      },
-
-      onAssistantMessageStart: async () => {
-        if (abortController?.signal.aborted) return;
-
-        // Primary guard: Skip if a message was just created but hasn't received content yet
-        if (currentMessageId && !streamedContent) {
-          logger.info('[runAgentLoopWithPersist] Skipping duplicate (no content yet)', {
-            conversationId,
-            currentMessageId,
-          });
-          return;
-        }
-
-        // Secondary guard: Check store for existing streaming message
-        // This catches race conditions where local variables are stale
-        const existingMessages = messagesStore.getMessages(conversationId);
-        const hasStreamingMessage = existingMessages.some(
-          (msg) => msg.role === 'assistant' && msg.isStreaming
-        );
-        if (hasStreamingMessage && !streamedContent) {
-          logger.info('[runAgentLoopWithPersist] Skipping duplicate (streaming message exists)', {
-            conversationId,
-          });
-          return;
-        }
-
-        // CRITICAL: Save old state before resetting
-        // We must reset BEFORE any async operation to prevent race conditions
-        // where onChunk is called while we're awaiting finalization
-        const oldMessageId = currentMessageId;
-        const oldContent = streamedContent;
-
-        // Reset for new message FIRST (synchronous operations only)
-        streamedContent = '';
-        currentMessageId = messagesStore.createAssistantMessageAndPersist(
-          conversationId,
-          config.agentId
-        );
-
-        // NOW finalize previous message (async, but currentMessageId already updated)
-        // This ensures any onChunk calls during await will use the new messageId
-        if (oldMessageId && oldContent) {
-          await messagesStore.finalizeMessageAndPersist(conversationId, oldMessageId, oldContent);
-        }
-      },
-
-      onAttachment: async (attachment: MessageAttachment) => {
-        if (abortController?.signal.aborted) return;
-        if (currentMessageId) {
-          await messagesStore.addAttachmentAndPersist(conversationId, currentMessageId, attachment);
-        }
-      },
-    };
-
-    // Call the original runAgentLoop with internal callbacks
-    return this.runAgentLoop(options, internalCallbacks, abortController, conversationId);
-  }
-
-  /**
-   * Handle post-processing after agent loop completes
-   */
-  private async handlePostProcessing(
-    conversationId: string,
-    isNewConversation?: boolean,
-    userMessage?: string
-  ): Promise<void> {
-    // Generate AI title for new conversations
-    if (isNewConversation && userMessage) {
-      ConversationManager.generateAndUpdateTitle(conversationId, userMessage).catch((error) => {
-        logger.error('Background title generation failed:', error);
-      });
-    }
-
-    // Mark task execution as completed
-    useTaskExecutionStore.getState().completeExecution(conversationId);
-
-    // Send notification if window is not focused
-    await notificationService.notifyAgentComplete();
   }
 }
 

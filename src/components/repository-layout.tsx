@@ -14,10 +14,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useConversations } from '@/hooks/use-conversations';
 import { useGlobalFileSearch } from '@/hooks/use-global-file-search';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRepositoryWatcher } from '@/hooks/use-repository-watcher';
+import { useTasks } from '@/hooks/use-tasks';
 import { logger } from '@/lib/logger';
 import { databaseService } from '@/services/database-service';
 import { getRelativePath } from '@/services/repository-utils';
@@ -121,7 +121,7 @@ export function RepositoryLayout() {
     }
   };
 
-  const { currentConversationId, selectConversation, startNewChat } = useConversations();
+  const { currentConversationId, selectConversation, startNewChat } = useTasks();
 
   // Removed isSpecOpen state as it's replaced by mode system
 

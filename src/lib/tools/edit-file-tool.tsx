@@ -5,7 +5,7 @@ import { createTool } from '@/lib/create-tool';
 import { logger } from '@/lib/logger';
 import { createPathSecurityError, isPathWithinProjectDirectory } from '@/lib/utils/path-security';
 import { ConversationManager } from '@/services/conversation-manager';
-import type { ConversationSettings } from '@/services/database/types';
+import type { TaskSettings } from '@/services/database/types';
 import { notificationService } from '@/services/notification-service';
 import { repositoryService } from '@/services/repository-service';
 import { normalizeFilePath } from '@/services/repository-utils';
@@ -341,7 +341,7 @@ Best practice workflow:
 
       if (settingsJson) {
         try {
-          const settings: ConversationSettings = JSON.parse(settingsJson);
+          const settings: TaskSettings = JSON.parse(settingsJson);
           if (settings.autoApproveEdits === true) {
             // Auto-approve is enabled, directly write the file
             await repositoryService.writeFile(fullPath, finalContent);
@@ -416,7 +416,7 @@ Best practice workflow:
           },
           onAllowAll: async () => {
             // 1. Update conversation settings to enable auto-approve
-            const newSettings: ConversationSettings = { autoApproveEdits: true };
+            const newSettings: TaskSettings = { autoApproveEdits: true };
             await ConversationManager.updateConversationSettings(
               conversationId,
               JSON.stringify(newSettings)

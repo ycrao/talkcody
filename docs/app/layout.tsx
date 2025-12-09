@@ -7,12 +7,14 @@ const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
+  preload: true, // Primary body font - preload for faster FCP
 });
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-space",
   display: "swap",
+  preload: false, // Heading font only - defer to not block LCP
 });
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -22,6 +24,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${inter.variable} ${spaceGrotesk.variable}`}
       lang="en"
     >
+      <head>
+        {/* Preconnect to critical third-party origins */}
+        <link rel="preconnect" href="https://cdn.talkcody.com" />
+        <link rel="dns-prefetch" href="https://cdn.talkcody.com" />
+        {/* Preconnect to analytics (if used) */}
+        <link rel="preconnect" href="https://cloud.umami.is" />
+        <link rel="dns-prefetch" href="https://cloud.umami.is" />
+      </head>
       <body className="flex flex-col min-h-screen font-sans antialiased bg-fd-background text-fd-foreground">
         {children}
         {process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID && (

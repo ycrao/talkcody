@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { RunningTasksTabs } from '@/components/chat/running-tasks-tabs';
 import { ChatBox } from '@/components/chat-box';
 import { ChatHistorySidebar } from '@/components/chat-history-sidebar';
 import { ChatToolbar } from '@/components/chat-toolbar';
-import { useConversations } from '@/hooks/use-conversations';
+import { useTasks } from '@/hooks/use-tasks';
 import { logger } from '@/lib/logger';
 import { databaseService } from '@/services/database-service';
+import { executionService } from '@/services/execution-service';
 import { useRepositoryStore } from '@/stores/repository-store';
 import { settingsManager } from '@/stores/settings-store';
 
@@ -12,7 +14,7 @@ export function ChatOnlyPage() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
 
-  const { currentConversationId, selectConversation, startNewChat } = useConversations();
+  const { currentConversationId, selectConversation, startNewChat } = useTasks();
 
   const rootPath = useRepositoryStore((state) => state.rootPath);
   const openFiles = useRepositoryStore((state) => state.openFiles);
@@ -127,6 +129,14 @@ export function ChatOnlyPage() {
           }}
           isLoadingProject={isLoading}
           rootPath={rootPath || undefined}
+        />
+
+        {/* Running tasks tabs for quick switching between concurrent tasks */}
+        <RunningTasksTabs
+          currentTaskId={currentConversationId}
+          onSelectTask={handleHistoryConversationSelect}
+          onNewChat={handleNewChat}
+          onStopTask={(taskId) => executionService.stopExecution(taskId)}
         />
 
         <div className="flex-1 overflow-hidden">

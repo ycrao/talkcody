@@ -73,28 +73,6 @@ export class ConversationManager {
   }
 
   /**
-   * Get messages for specified position
-   */
-  static async getMessagesForPosition(
-    conversationId: string,
-    positionIndex: number
-  ): Promise<UIMessage[]> {
-    const storedMessages = await databaseService.getMessagesForPosition(
-      conversationId,
-      positionIndex
-    );
-    return storedMessages.map((msg: StoredMessage) => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      timestamp: new Date(msg.timestamp),
-      isStreaming: false,
-      assistantId: msg.assistant_id,
-      attachments: msg.attachments,
-    }));
-  }
-
-  /**
    * Update conversation usage statistics
    */
   static async updateConversationUsage(

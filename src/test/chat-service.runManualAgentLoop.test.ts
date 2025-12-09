@@ -67,6 +67,7 @@ vi.mock('../lib/llm-utils', () => ({
 vi.mock('ai', () => ({
   streamText: vi.fn(),
   stepCountIs: vi.fn((count) => ({ type: 'step-count', count })),
+  smoothStream: vi.fn(() => undefined),
   NoSuchToolError: {
     isInstance: vi.fn().mockReturnValue(false),
   },

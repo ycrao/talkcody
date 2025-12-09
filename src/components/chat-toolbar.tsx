@@ -1,15 +1,17 @@
 import { ArrowDown, ArrowUp, FileSearch, Plus, Search, SquareTerminal, Zap } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/hooks/use-locale';
-import { logger } from '@/lib/logger';
-import { modelService } from '@/services/model-service';
-import { useConversationUsageStore } from '@/stores/conversation-usage-store';
+import {
+  formatCost,
+  formatTokens,
+  getContextUsageBgColor,
+  getContextUsageColor,
+  useToolbarState,
+} from '@/hooks/use-toolbar-state';
+import { useExecutionStore } from '@/stores/execution-store';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
-import { useSettingsStore } from '@/stores/settings-store';
-import { useTaskExecutionStore } from '@/stores/task-execution-store';
 import { ChatHistory } from './chat-history';
 import { ProjectDropdown } from './project-dropdown';
 
@@ -50,87 +52,9 @@ export function ChatToolbar({
   onOpenContentSearch,
 }: ChatToolbarProps) {
   const t = useTranslation();
-  const [modelName, setModelName] = useState<string>('');
   const { isPlanModeEnabled } = usePlanModeStore();
-  const isMaxReached = useTaskExecutionStore((state) => state.isMaxReached());
-  const { cost, inputTokens, outputTokens, contextUsage } = useConversationUsageStore();
-
-  const formatTokens = (tokens: number): string => {
-    if (tokens >= 1000) {
-      return `${(tokens / 1000).toFixed(1)}k`;
-    }
-    return tokens.toString();
-  };
-
-  const formatCost = (costValue: number): string => {
-    return `$${costValue.toFixed(4)}`;
-  };
-
-  const getContextUsageColor = (usage: number): string => {
-    if (usage >= 90) return 'text-red-600 dark:text-red-400';
-    if (usage >= 70) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-emerald-600 dark:text-emerald-400';
-  };
-
-  const getContextUsageBgColor = (usage: number): string => {
-    if (usage >= 90) return 'bg-red-100 dark:bg-red-900/30';
-    if (usage >= 70) return 'bg-yellow-100 dark:bg-yellow-900/30';
-    return 'bg-emerald-100 dark:bg-emerald-900/30';
-  };
-
-  // Subscribe to settings store for reactive updates
-  const {
-    model_type_main,
-    model_type_small,
-    model_type_image_generator,
-    model_type_transcription,
-    assistantId,
-  } = useSettingsStore();
-
-  // Fetch current model identifier
-  const updateModelName = useCallback(async () => {
-    try {
-      const modelIdentifier = await modelService.getCurrentModel();
-      setModelName(modelIdentifier || '');
-    } catch (error) {
-      logger.error('Failed to get current model:', error);
-      setModelName('');
-    }
-  }, []);
-
-  // Update model name when model type settings change
-  // biome-ignore lint/correctness/useExhaustiveDependencies: These dependencies trigger re-fetch when model settings change in the store
-  useEffect(() => {
-    updateModelName();
-  }, [
-    updateModelName,
-    model_type_main,
-    model_type_small,
-    model_type_image_generator,
-    model_type_transcription,
-    assistantId,
-  ]);
-
-  // Also listen for other events (modelsUpdated, settingsChanged)
-  useEffect(() => {
-    // Listen for model updates
-    const handleModelsUpdate = () => {
-      updateModelName();
-    };
-
-    // Listen for settings changes (agent changes)
-    const handleSettingsChange = () => {
-      updateModelName();
-    };
-
-    window.addEventListener('modelsUpdated', handleModelsUpdate);
-    window.addEventListener('settingsChanged', handleSettingsChange);
-
-    return () => {
-      window.removeEventListener('modelsUpdated', handleModelsUpdate);
-      window.removeEventListener('settingsChanged', handleSettingsChange);
-    };
-  }, [updateModelName]);
+  const isMaxReached = useExecutionStore((state) => state.isMaxReached());
+  const { modelName, cost, inputTokens, outputTokens, contextUsage } = useToolbarState();
 
   return (
     <div className="flex flex-shrink-0 items-center justify-between border-b bg-gray-50 px-3 py-2 dark:bg-gray-900">

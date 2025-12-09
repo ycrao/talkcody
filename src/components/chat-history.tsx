@@ -4,9 +4,9 @@ import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useConversations } from '@/hooks/use-conversations';
 import { useTranslation } from '@/hooks/use-locale';
-import { useTaskExecutionStore } from '@/stores/task-execution-store';
+import { useTasks } from '@/hooks/use-tasks';
+import { useExecutionStore } from '@/stores/execution-store';
 import { ConversationList } from './conversation-list';
 
 interface ChatHistoryProps {
@@ -27,8 +27,8 @@ export function ChatHistory({
   const t = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   // Use selectors to avoid re-rendering on every streaming chunk
-  const runningTaskIds = useTaskExecutionStore(useShallow((state) => state.getRunningTaskIds()));
-  const isMaxReached = useTaskExecutionStore((state) => state.isMaxReached());
+  const runningTaskIds = useExecutionStore(useShallow((state) => state.getRunningTaskIds()));
+  const isMaxReached = useExecutionStore((state) => state.isMaxReached());
 
   const {
     conversations,
@@ -36,13 +36,13 @@ export function ChatHistory({
     editingId,
     editingTitle,
     setEditingTitle,
-    loadConversations,
+    loadTasks: loadConversations,
     deleteConversation,
     finishEditing,
     startEditing,
     cancelEditing,
     selectConversation,
-  } = useConversations();
+  } = useTasks();
 
   // Refresh conversations when history opens or active conversation changes
   useEffect(() => {

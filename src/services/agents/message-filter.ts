@@ -1,11 +1,12 @@
 // src/services/agents/message-filter.ts
 
-import type { ReasoningPart } from '@ai-sdk/provider-utils';
-import type { FilePart, ModelMessage, TextPart, ToolCallPart, ToolResultPart } from 'ai';
+import type { ModelMessage, TextPart, ToolCallPart, ToolResultPart } from 'ai';
 import { logger } from '@/lib/logger';
+import { mergeConsecutiveAssistantMessages } from '@/lib/message-convert';
+import { validateAnthropicMessages } from '@/lib/message-validate';
 
-// Type for message content parts
-type MessageContentPart = TextPart | FilePart | ToolCallPart | ToolResultPart | ReasoningPart;
+// Type for assistant message content parts
+type AssistantContentPart = TextPart | ToolCallPart;
 
 /**
  * MessageFilter handles message optimization and filtering
@@ -24,16 +25,17 @@ export class MessageFilter {
 
     logger.info(`Filtering messages: ${messages.length} messages, ${toolCallCount} tool calls`);
 
-    let filteredMessages = messages;
+    // Step 1: Collect all toolCallIds that should be filtered
+    const toolCallIdsToFilter = this.collectToolCallIdsToFilter(messages);
 
-    // Optimization 1: Remove duplicate file reads (always apply)
-    filteredMessages = this.filterDuplicateFileReads(filteredMessages);
-
-    // Optimization 2: Remove exploratory tools if we have enough tool calls
-    if (toolCallCount > 20) {
-      logger.info('? > 20, filtering exploratory tools');
-      filteredMessages = this.filterExploratoryTools(filteredMessages);
+    if (toolCallIdsToFilter.size === 0) {
+      return messages;
     }
+
+    logger.info(`Filtering ${toolCallIdsToFilter.size} tool call pairs`);
+
+    // Step 2: Filter messages by toolCallIds
+    const filteredMessages = this.filterByToolCallIds(messages, toolCallIdsToFilter);
 
     const removedCount = messages.length - filteredMessages.length;
     if (removedCount > 0) {
@@ -44,66 +46,63 @@ export class MessageFilter {
   }
 
   /**
-   * Filter duplicate file reads, keeping only the most recent read for each file
-   * Considers both file path and line range (start_line, line_count) when determining duplicates
+   * Collect all toolCallIds that should be filtered
    */
-  filterDuplicateFileReads(messages: ModelMessage[]): ModelMessage[] {
-    // Map to track the latest tool call index for each unique file read
-    // Key format: "file_path:start_line:line_count"
-    const fileReadMap = new Map<string, { callIndex: number; resultIndex: number }>();
-    const indicesToRemove = new Set<number>();
+  private collectToolCallIdsToFilter(messages: ModelMessage[]): Set<string> {
+    const toolCallIdsToFilter = new Set<string>();
 
-    // First pass: identify all readFile tool calls and their results
-    for (let index = 0; index < messages.length; index++) {
-      const message = messages[index];
-      if (!message) continue;
+    // Collect from duplicate file reads
+    const duplicateIds = this.getDuplicateFileReadIds(messages);
+    for (const id of duplicateIds) {
+      toolCallIdsToFilter.add(id);
+    }
 
+    // Collect from exploratory tools
+    const exploratoryIds = this.getExploratoryToolIds(messages);
+    for (const id of exploratoryIds) {
+      toolCallIdsToFilter.add(id);
+    }
+
+    return toolCallIdsToFilter;
+  }
+
+  /**
+   * Get toolCallIds for duplicate file reads (keeping only the most recent)
+   */
+  private getDuplicateFileReadIds(messages: ModelMessage[]): Set<string> {
+    const duplicateIds = new Set<string>();
+    // Map to track the latest toolCallId for each unique file read key
+    const fileReadMap = new Map<string, string>();
+
+    for (const message of messages) {
       if (message.role === 'assistant' && Array.isArray(message.content)) {
-        const toolCall = message.content.find((c: MessageContentPart) => c.type === 'tool-call') as
-          | ToolCallPart
-          | undefined;
-        if (toolCall && toolCall.type === 'tool-call' && toolCall.toolName === 'readFile') {
-          const fileReadKey = this.extractFileReadKey(toolCall);
-          if (fileReadKey) {
-            // If we've seen this exact file read before (same path and line range), mark the old call and result for removal
-            const previous = fileReadMap.get(fileReadKey);
-            if (previous) {
-              indicesToRemove.add(previous.callIndex);
-              indicesToRemove.add(previous.resultIndex);
-              logger.info(`Marking duplicate readFile for removal: ${fileReadKey}`);
-            }
-
-            // Find the corresponding tool result
-            if (toolCall.toolCallId) {
-              const resultIndex = this.findToolResultIndex(messages, toolCall.toolCallId, index);
-              if (resultIndex !== -1) {
-                fileReadMap.set(fileReadKey, { callIndex: index, resultIndex });
+        for (const part of message.content) {
+          if (part.type === 'tool-call' && part.toolName === 'readFile') {
+            const fileReadKey = this.extractFileReadKey(part as ToolCallPart);
+            if (fileReadKey && part.toolCallId) {
+              const previous = fileReadMap.get(fileReadKey);
+              if (previous) {
+                // Mark the old one for removal
+                duplicateIds.add(previous);
+                logger.info(`Marking duplicate readFile for removal: ${fileReadKey}`);
               }
+              fileReadMap.set(fileReadKey, part.toolCallId);
             }
           }
         }
       }
     }
 
-    // Second pass: filter out marked messages
-    const filteredMessages = messages.filter((_, index) => !indicesToRemove.has(index));
-
-    if (indicesToRemove.size > 0) {
-      logger.info(`Filtered ${indicesToRemove.size} duplicate readFile messages`);
-    }
-
-    return filteredMessages;
+    return duplicateIds;
   }
 
   /**
-   * Filter exploratory tool calls when we have enough context
-   * Only filters old exploratory tools, keeping recent ones in the protection window
+   * Get toolCallIds for exploratory tools outside protection window
    */
-  filterExploratoryTools(messages: ModelMessage[]): ModelMessage[] {
-    const indicesToRemove = new Set<number>();
+  private getExploratoryToolIds(messages: ModelMessage[]): Set<string> {
+    const exploratoryIds = new Set<string>();
 
     // Define a protection window for recent messages
-    // Keep the last 10 messages intact to preserve recent context
     const protectionWindowSize = 20;
     const protectionThreshold = Math.max(0, messages.length - protectionWindowSize);
 
@@ -113,42 +112,77 @@ export class MessageFilter {
       const message = messages[index];
       if (!message) continue;
 
-      // Skip messages in the protection window (recent messages)
+      // Skip messages in the protection window
       if (index >= protectionThreshold) {
         continue;
       }
 
       if (message.role === 'assistant' && Array.isArray(message.content)) {
-        const toolCall = message.content.find((c: MessageContentPart) => c.type === 'tool-call') as
-          | ToolCallPart
-          | undefined;
-        if (
-          toolCall &&
-          toolCall.type === 'tool-call' &&
-          this.isExploratoryTool(toolCall.toolName)
-        ) {
-          indicesToRemove.add(index);
-
-          // Also remove the corresponding tool result
-          const resultIndex = this.findToolResultIndex(messages, toolCall.toolCallId, index);
-          if (resultIndex !== -1) {
-            indicesToRemove.add(resultIndex);
+        for (const part of message.content) {
+          if (
+            part.type === 'tool-call' &&
+            this.isExploratoryTool(part.toolName) &&
+            part.toolCallId
+          ) {
+            exploratoryIds.add(part.toolCallId);
+            logger.info(`Marking exploratory tool for removal: ${part.toolName} at index ${index}`);
           }
-
-          logger.info(
-            `Marking exploratory tool for removal: ${toolCall.toolName} at index ${index}`
-          );
         }
       }
     }
 
-    const filteredMessages = messages.filter((_, index) => !indicesToRemove.has(index));
+    return exploratoryIds;
+  }
 
-    if (indicesToRemove.size > 0) {
-      logger.info(`Filtered ${indicesToRemove.size} exploratory tool messages`);
+  /**
+   * Filter messages by removing tool-call and tool-result parts with matching toolCallIds
+   */
+  private filterByToolCallIds(
+    messages: ModelMessage[],
+    toolCallIdsToFilter: Set<string>
+  ): ModelMessage[] {
+    const result: ModelMessage[] = [];
+
+    for (const message of messages) {
+      if (message.role === 'assistant' && Array.isArray(message.content)) {
+        // Filter out tool-call parts that match
+        const filteredContent = (message.content as AssistantContentPart[]).filter((part) => {
+          if (part.type === 'tool-call' && part.toolCallId) {
+            return !toolCallIdsToFilter.has(part.toolCallId);
+          }
+          return true;
+        });
+
+        // Only keep message if it has remaining content
+        if (filteredContent.length > 0) {
+          result.push({
+            ...message,
+            content: filteredContent,
+          });
+        }
+      } else if (message.role === 'tool' && Array.isArray(message.content)) {
+        // Filter out tool-result parts that match
+        const filteredContent = (message.content as ToolResultPart[]).filter((part) => {
+          if (part.type === 'tool-result' && part.toolCallId) {
+            return !toolCallIdsToFilter.has(part.toolCallId);
+          }
+          return true;
+        });
+
+        // Only keep message if it has remaining content
+        if (filteredContent.length > 0) {
+          result.push({
+            ...message,
+            content: filteredContent,
+          });
+        }
+      } else {
+        // Keep other messages as-is (system, user)
+        result.push(message);
+      }
     }
 
-    return filteredMessages;
+    return result;
   }
 
   /**
@@ -158,9 +192,10 @@ export class MessageFilter {
     let count = 0;
     for (const message of messages) {
       if (message.role === 'assistant' && Array.isArray(message.content)) {
-        const hasToolCall = message.content.some((c: MessageContentPart) => c.type === 'tool-call');
-        if (hasToolCall) {
-          count++;
+        for (const part of message.content) {
+          if (part.type === 'tool-call') {
+            count++;
+          }
         }
       }
     }
@@ -170,15 +205,12 @@ export class MessageFilter {
   /**
    * Extract file read key from readFile tool call
    * Returns a unique key that includes file path and line range (if specified)
-   * Format: "file_path:start_line:line_count"
-   * For full file reads (no line range): "file_path:full:full"
    */
   private extractFileReadKey(toolCall: ToolCallPart | undefined): string | null {
     if (!toolCall || toolCall.type !== 'tool-call') {
       return null;
     }
     try {
-      // The input might be directly an object or need parsing
       const input =
         typeof toolCall.input === 'string' ? JSON.parse(toolCall.input) : toolCall.input;
 
@@ -187,7 +219,6 @@ export class MessageFilter {
         return null;
       }
 
-      // Include start_line and line_count in the key to distinguish different read ranges
       const startLine = input?.start_line ?? 'full';
       const lineCount = input?.line_count ?? 'full';
 
@@ -205,28 +236,27 @@ export class MessageFilter {
     return this.exploratoryTools.has(toolName);
   }
 
-  /**
-   * Find the index of tool result message corresponding to a tool call
-   */
-  private findToolResultIndex(
-    messages: ModelMessage[],
-    toolCallId: string,
-    startIndex: number
-  ): number {
-    // Search forward from the tool call to find its result
-    for (let i = startIndex + 1; i < messages.length; i++) {
-      const message = messages[i];
-      if (!message) continue;
+  // Legacy methods for backwards compatibility - delegate to new implementation
 
-      if (message.role === 'tool' && Array.isArray(message.content)) {
-        const toolResult = message.content.find(
-          (c: MessageContentPart) => c.type === 'tool-result' && c.toolCallId === toolCallId
-        );
-        if (toolResult) {
-          return i;
-        }
-      }
+  /**
+   * @deprecated Use filterMessages instead
+   */
+  filterDuplicateFileReads(messages: ModelMessage[]): ModelMessage[] {
+    const duplicateIds = this.getDuplicateFileReadIds(messages);
+    if (duplicateIds.size === 0) {
+      return messages;
     }
-    return -1;
+    return this.filterByToolCallIds(messages, duplicateIds);
+  }
+
+  /**
+   * @deprecated Use filterMessages instead
+   */
+  filterExploratoryTools(messages: ModelMessage[]): ModelMessage[] {
+    const exploratoryIds = this.getExploratoryToolIds(messages);
+    if (exploratoryIds.size === 0) {
+      return messages;
+    }
+    return this.filterByToolCallIds(messages, exploratoryIds);
   }
 }

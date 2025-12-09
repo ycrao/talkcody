@@ -63,7 +63,7 @@ const modelMessageSchema = z.union([
 ]);
 
 // Schema with semantic validation for tool-call/tool-result pairing and consecutive message checks
-const modelMessagesSchema = z.array(modelMessageSchema).superRefine((messages, ctx) => {
+export const modelMessagesSchema = z.array(modelMessageSchema).superRefine((messages, ctx) => {
   // Collect all tool-call and tool-result toolCallIds
   const toolCallIds = new Set<string>();
   const toolResultIds = new Set<string>();

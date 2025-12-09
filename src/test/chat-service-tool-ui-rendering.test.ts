@@ -79,6 +79,7 @@ vi.mock('@/lib/tool-adapter', () => ({
 vi.mock('ai', () => ({
   streamText: vi.fn(),
   stepCountIs: vi.fn((count) => ({ type: 'step-count', count })),
+  smoothStream: vi.fn(() => undefined),
   NoSuchToolError: { isInstance: vi.fn(() => false) },
   InvalidToolInputError: { isInstance: vi.fn(() => false) },
 }));

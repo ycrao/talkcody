@@ -10,7 +10,6 @@ import { TursoDatabaseInit } from './database/turso-database-init';
 
 // Re-export types
 export type {
-  Conversation,
   CreateMCPServerData,
   CreateProjectData,
   CreateTodoItem,
@@ -18,6 +17,7 @@ export type {
   Project,
   StoredAttachment,
   StoredMessage,
+  Task as Conversation,
   TodoItem,
   UpdateMCPServerData,
   UpdateProjectData,
@@ -159,7 +159,7 @@ export class DatabaseService {
     return this.conversationService.createConversation(title, conversationId, projectId);
   }
 
-  async getConversations(projectId?: string): Promise<import('./database/types').Conversation[]> {
+  async getConversations(projectId?: string): Promise<import('./database/types').Task[]> {
     await this.ensureInitialized();
     if (!this.conversationService) throw new Error('Conversation service not initialized');
     return this.conversationService.getConversations(projectId);
@@ -167,7 +167,7 @@ export class DatabaseService {
 
   async getConversationDetails(
     conversationId: string
-  ): Promise<import('./database/types').Conversation | null> {
+  ): Promise<import('./database/types').Task | null> {
     await this.ensureInitialized();
     if (!this.conversationService) throw new Error('Conversation service not initialized');
     return this.conversationService.getConversationDetails(conversationId);
@@ -218,15 +218,6 @@ export class DatabaseService {
     await this.ensureInitialized();
     if (!this.conversationService) throw new Error('Conversation service not initialized');
     return this.conversationService.getMessages(conversationId);
-  }
-
-  async getMessagesForPosition(
-    conversationId: string,
-    positionIndex: number
-  ): Promise<import('./database/types').StoredMessage[]> {
-    await this.ensureInitialized();
-    if (!this.conversationService) throw new Error('Conversation service not initialized');
-    return this.conversationService.getMessagesForPosition(conversationId, positionIndex);
   }
 
   async getAttachmentsForMessage(messageId: string): Promise<MessageAttachment[]> {

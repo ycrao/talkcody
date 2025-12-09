@@ -14,6 +14,16 @@ const config = {
       },
     ],
   },
+  // Performance optimizations
+  experimental: {
+    // Enable optimized package imports for better tree-shaking
+    optimizePackageImports: ["lucide-react", "framer-motion"],
+  },
+  // Compiler optimizations
+  compiler: {
+    // Remove console.log in production
+    removeConsole: process.env.NODE_ENV === "production",
+  },
 };
 
 export default withMDX(config);

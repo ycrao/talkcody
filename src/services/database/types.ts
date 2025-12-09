@@ -12,7 +12,7 @@ export interface Project {
   root_path?: string;
 }
 
-export interface Conversation {
+export interface Task {
   id: string;
   title: string;
   project_id: string;
@@ -23,9 +23,10 @@ export interface Conversation {
   input_token: number;
   output_token: number;
   settings?: string; // JSON string for conversation-level settings
+  context_usage?: number; // Percentage of context window used
 }
 
-export interface ConversationSettings {
+export interface TaskSettings {
   autoApproveEdits?: boolean; // When true, skip review dialog for file edits in this conversation
 }
 

@@ -6,7 +6,7 @@ import { generateId } from '@/lib/utils';
 import type { MessageAttachment } from '@/types/agent';
 import { fileService } from '../file-service';
 import type { TursoClient } from './turso-client';
-import type { Conversation, StoredAttachment, StoredMessage } from './types';
+import type { StoredAttachment, StoredMessage, Task } from './types';
 
 export class ConversationService {
   constructor(private db: TursoClient) {}
@@ -29,7 +29,7 @@ export class ConversationService {
     return conversationId;
   }
 
-  async getConversations(projectId?: string): Promise<Conversation[]> {
+  async getConversations(projectId?: string): Promise<Task[]> {
     let sql = 'SELECT * FROM conversations';
     const params: any[] = [];
 
@@ -40,15 +40,14 @@ export class ConversationService {
 
     sql += ' ORDER BY updated_at DESC';
 
-    const result = await this.db.select<Conversation[]>(sql, params);
+    const result = await this.db.select<Task[]>(sql, params);
     return result;
   }
 
-  async getConversationDetails(conversationId: string): Promise<Conversation | null> {
-    const result = await this.db.select<Conversation[]>(
-      'SELECT * FROM conversations WHERE id = $1',
-      [conversationId]
-    );
+  async getConversationDetails(conversationId: string): Promise<Task | null> {
+    const result = await this.db.select<Task[]>('SELECT * FROM conversations WHERE id = $1', [
+      conversationId,
+    ]);
 
     return result[0] || null;
   }
@@ -181,25 +180,6 @@ export class ConversationService {
     const messages = await this.db.select<StoredMessage[]>(
       'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY timestamp ASC',
       [conversationId]
-    );
-
-    // Load attachments for each message
-    for (const message of messages) {
-      message.attachments = await this.getAttachmentsForMessage(message.id);
-    }
-
-    return messages;
-  }
-
-  async getMessagesForPosition(
-    conversationId: string,
-    positionIndex: number
-  ): Promise<StoredMessage[]> {
-    const messages = await this.db.select<StoredMessage[]>(
-      `SELECT * FROM messages
-             WHERE conversation_id = $1 AND position_index = $2
-             ORDER BY timestamp ASC`,
-      [conversationId, positionIndex]
     );
 
     // Load attachments for each message

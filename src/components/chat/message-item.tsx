@@ -1,7 +1,7 @@
 // src/components/chat/message-item.tsx
 
 import { Check, CopyIcon, RefreshCcwIcon, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { FilePreview } from '@/components/chat/file-preview';
 import { ToolErrorBoundary } from '@/components/tools/tool-error-boundary';
 import { ToolErrorFallback } from '@/components/tools/tool-error-fallback';
@@ -26,7 +26,7 @@ export interface MessageItemProps {
   onDelete?: (messageId: string) => void;
 }
 
-export function MessageItem({ message, onRegenerate, onDelete }: MessageItemProps) {
+function MessageItemComponent({ message, onRegenerate, onDelete }: MessageItemProps) {
   const [hasCopied, setHasCopied] = useState(false);
 
   useEffect(() => {
@@ -313,3 +313,21 @@ export function MessageItem({ message, onRegenerate, onDelete }: MessageItemProp
     </div>
   );
 }
+
+// Memoized component to prevent unnecessary re-renders during streaming
+// - Streaming messages: always re-render (content is updating)
+// - Completed messages: only re-render if content actually changed
+export const MessageItem = memo(MessageItemComponent, (prevProps, nextProps) => {
+  // Allow re-render for streaming messages
+  if (nextProps.message.isStreaming || prevProps.message.isStreaming) {
+    return false; // false = needs re-render
+  }
+
+  // For completed messages, compare length instead of full content (more efficient)
+  const prevLen =
+    typeof prevProps.message.content === 'string' ? prevProps.message.content.length : 0;
+  const nextLen =
+    typeof nextProps.message.content === 'string' ? nextProps.message.content.length : 0;
+
+  return prevProps.message.id === nextProps.message.id && prevLen === nextLen;
+});
