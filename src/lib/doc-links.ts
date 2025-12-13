@@ -47,6 +47,8 @@ export function getDocLinks() {
       lmstudio: `${BASE_URL}/configuration/api-keys#lm-studio`,
       tavily: `${BASE_URL}/configuration/api-keys#tavily`,
       elevenlabs: `${BASE_URL}/configuration/api-keys#eleven-labs`,
+      moonshot: `${BASE_URL}/configuration/api-keys#moonshot`,
+      serper: `${BASE_URL}/configuration/api-keys#serper`,
     },
 
     // Introduction

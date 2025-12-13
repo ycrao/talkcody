@@ -48,6 +48,7 @@ export const PROVIDER_ICONS: Record<string, ComponentType<IconProps>> = {
   tavily: createImageIcon('/icons/providers/tavily.svg', 'Tavily'),
 
   // Providers with downloaded favicon images
+  serper: createImageIcon('/icons/providers/serpser.jpeg', 'Serper'),
   zhipu: createImageIcon('/icons/providers/zhipu.png', 'Zhipu AI'),
 };
 

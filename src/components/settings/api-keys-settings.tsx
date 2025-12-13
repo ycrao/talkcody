@@ -372,36 +372,34 @@ export function ApiKeysSettings() {
                 }
                 className="border rounded-lg"
               >
-                <CollapsibleTrigger className="flex items-center gap-2 w-full p-3 hover:bg-muted/50 transition-colors rounded-lg">
-                  <ChevronRight
-                    className={cn(
-                      'h-4 w-4 shrink-0 transition-transform duration-200',
-                      isExpanded && 'rotate-90'
+                <div className="flex items-center">
+                  <CollapsibleTrigger className="flex items-center gap-2 flex-1 p-3 hover:bg-muted/50 transition-colors rounded-lg">
+                    <ChevronRight
+                      className={cn(
+                        'h-4 w-4 shrink-0 transition-transform duration-200',
+                        isExpanded && 'rotate-90'
+                      )}
+                    />
+                    <ProviderIcon providerId={providerId} size={18} className="shrink-0" />
+                    <span className="font-medium text-sm">{config.name}</span>
+                    {hasKey && (
+                      <span className="text-green-600 dark:text-green-400 text-xs bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full ml-auto">
+                        {t.Settings.apiKeys.configured}
+                      </span>
                     )}
-                  />
-                  <ProviderIcon providerId={providerId} size={18} className="shrink-0" />
-                  <span className="font-medium text-sm">{config.name}</span>
-                  {hasKey && (
-                    <span className="text-green-600 dark:text-green-400 text-xs bg-green-50 dark:bg-green-950 px-2 py-0.5 rounded-full ml-auto">
-                      {t.Settings.apiKeys.configured}
-                    </span>
-                  )}
+                  </CollapsibleTrigger>
                   {docLink && (
                     <a
                       href={docLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={cn(
-                        'text-muted-foreground hover:text-foreground transition-colors',
-                        !hasKey && 'ml-auto'
-                      )}
+                      className="text-muted-foreground hover:text-foreground transition-colors p-3"
                       title={t.Settings.apiKeys.viewDocumentation}
-                      onClick={(e) => e.stopPropagation()}
                     >
                       <ExternalLink size={14} />
                     </a>
                   )}
-                </CollapsibleTrigger>
+                </div>
 
                 <CollapsibleContent className="px-3 pb-3 pt-0 border-t">
                   <div className="pt-3 space-y-3">
