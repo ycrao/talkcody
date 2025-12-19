@@ -47,6 +47,11 @@ export function hasApiKeyForProvider(
   providerId: string,
   apiKeys: Record<string, string | undefined>
 ): boolean {
+  // TalkCody Free is always available - auth check happens at usage time
+  if (providerId === 'talkcody') {
+    return true;
+  }
+
   // Local providers (Ollama, LM Studio) use 'enabled' instead of API key
   if (isLocalProvider(providerId)) {
     return apiKeys[providerId] === 'enabled';
@@ -124,8 +129,11 @@ export function createProviders(
       apiKey = providerDef.customConfig.apiKey;
     }
 
-    // Skip if no API key (except for ollama/lmstudio which uses 'enabled')
-    if (!apiKey) {
+    // TalkCody Free uses JWT auth, not API key - always create it
+    const isTalkCody = providerId === 'talkcody';
+
+    // Skip if no API key (except for special providers)
+    if (!apiKey && !isTalkCody) {
       logger.debug(`Skipping provider ${providerId}: no API key configured`);
       continue;
     }
@@ -150,7 +158,8 @@ export function createProviders(
 
       const baseUrl = customBaseUrl || providerDef.baseUrl;
       try {
-        const createdProvider = providerDef.createProvider(apiKey, baseUrl);
+        // For talkcody, apiKey is not used (uses JWT auth), pass empty string
+        const createdProvider = providerDef.createProvider(apiKey || '', baseUrl);
         providers.set(providerId, createdProvider);
       } catch (error) {
         logger.error(`Failed to create provider ${providerId}:`, error);

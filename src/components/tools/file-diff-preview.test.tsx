@@ -169,7 +169,7 @@ describe('FileDiffPreview Component', () => {
     const onApprove = vi.fn();
     render(<FileDiffPreview {...defaultProps} onApprove={onApprove} />);
 
-    const approveButton = screen.getByRole('button', { name: /approve & apply/i });
+    const approveButton = screen.getByRole('button', { name: /^approve$/i });
     fireEvent.click(approveButton);
 
     expect(onApprove).toHaveBeenCalledTimes(1);
@@ -209,7 +209,7 @@ describe('FileDiffPreview Component', () => {
     const onAllowAll = vi.fn();
     render(<FileDiffPreview {...defaultProps} onAllowAll={onAllowAll} />);
 
-    const allowAllButton = screen.getByRole('button', { name: /allow all edits in this conversation/i });
+    const allowAllButton = screen.getByRole('button', { name: /allow all edits in this task/i });
     expect(allowAllButton).toBeInTheDocument();
 
     fireEvent.click(allowAllButton);
@@ -219,7 +219,7 @@ describe('FileDiffPreview Component', () => {
   it('should not show Allow All button when onAllowAll callback is not provided', () => {
     render(<FileDiffPreview {...defaultProps} />);
 
-    const allowAllButton = screen.queryByRole('button', { name: /allow all edits in this conversation/i });
+    const allowAllButton = screen.queryByRole('button', { name: /allow all edits in this task/i });
     expect(allowAllButton).not.toBeInTheDocument();
   });
 

@@ -1,18 +1,12 @@
-import { ArrowDown, ArrowUp, Maximize2, Minimize2, Plus } from 'lucide-react';
+import { Maximize2, Minimize2, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/hooks/use-locale';
-import {
-  formatCost,
-  formatTokens,
-  getContextUsageBgColor,
-  getContextUsageColor,
-  useToolbarState,
-} from '@/hooks/use-toolbar-state';
 import { useExecutionStore } from '@/stores/execution-store';
 
 import { ChatHistory } from './chat-history';
+import { ToolbarStats } from './toolbar-stats';
 
 interface ChatPanelHeaderProps {
   currentTaskId?: string;
@@ -35,52 +29,16 @@ export function ChatPanelHeader({
 }: ChatPanelHeaderProps) {
   const t = useTranslation();
   const isMaxReached = useExecutionStore((state) => state.isMaxReached());
-  const { modelName, cost, inputTokens, outputTokens, contextUsage } = useToolbarState();
 
   return (
-    <div className="flex h-[42px] flex-shrink-0 items-center justify-between border-b bg-gray-50 px-3 dark:bg-gray-900">
-      {/* Left: Model, Plan Mode, Cost/Tokens */}
-      <div className="flex items-center gap-3">
-        {modelName && (
-          <div className="flex items-center gap-1.5 rounded-md bg-blue-100 px-2 py-1 dark:bg-blue-900/30">
-            <span className="font-medium text-blue-700 text-xs dark:text-blue-300">
-              {t.Chat.toolbar.model}:
-            </span>
-            <span className="font-medium text-blue-900 text-xs dark:text-blue-100">
-              {modelName}
-            </span>
-          </div>
-        )}
-
-        {(cost > 0 || inputTokens > 0 || outputTokens > 0) && (
-          <div className="flex items-center gap-1.5 rounded-md bg-emerald-100 px-2 py-1 dark:bg-emerald-900/30">
-            <span className="font-medium text-emerald-700 text-xs dark:text-emerald-300">
-              {formatCost(cost)}
-            </span>
-            <span className="flex items-center text-emerald-600 text-xs dark:text-emerald-400">
-              <ArrowUp className="h-3 w-3" />
-              {formatTokens(inputTokens)} {t.Chat.toolbar.inputTokens}
-            </span>
-            <span className="flex items-center text-emerald-600 text-xs dark:text-emerald-400">
-              <ArrowDown className="h-3 w-3" />
-              {formatTokens(outputTokens)} {t.Chat.toolbar.outputTokens}
-            </span>
-          </div>
-        )}
-
-        {contextUsage > 0 && (
-          <div
-            className={`flex items-center gap-1.5 rounded-md px-2 py-1 ${getContextUsageBgColor(contextUsage)}`}
-          >
-            <span className={`font-medium text-xs ${getContextUsageColor(contextUsage)}`}>
-              Context: {contextUsage.toFixed(0)}%
-            </span>
-          </div>
-        )}
+    <div className="@container flex h-[42px] flex-shrink-0 items-center justify-between gap-2 overflow-hidden border-b bg-gray-50 px-3 dark:bg-gray-900">
+      {/* Left: Model, Cost/Tokens, Context */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+        <ToolbarStats />
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-1">
+      <div className="flex flex-shrink-0 items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

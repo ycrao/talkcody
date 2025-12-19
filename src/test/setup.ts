@@ -192,6 +192,7 @@ vi.mock('../lib/models', () => ({
   GPT5: 'gpt-5',
   GPT5_MINI: 'gpt-5-mini',
   GPT51_CODE_MAX: 'gpt-51-codex-max',
+  MINIMAX_M21: 'minimax-m21',
   CODE_STARL: 'codestral',
   GROK_CODE_FAST: 'grok-code-fast-1',
   GLM_46: 'glm-4.6',

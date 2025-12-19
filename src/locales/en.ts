@@ -887,6 +887,8 @@ const en: LocaleDefinition = {
   },
 
   Auth: {
+    loginRequired: 'Sign in required to use TalkCody Free',
+    signIn: 'Sign In',
     success: {
       signedIn: 'Signed in successfully',
       signedOut: 'Signed out successfully',
@@ -1009,8 +1011,8 @@ const en: LocaleDefinition = {
     feedbackPlaceholder: "Describe what changes you'd like to see...",
     reviewPrompt: 'Review the changes above and choose an action',
     submitFeedback: 'Submit Feedback',
-    allowAllEdits: 'Allow all edits in this conversation',
-    approveAndApply: 'Approve & Apply',
+    allowAllEdits: 'Allow all edits in this task',
+    approveAndApply: 'Approve',
   },
 
   PlanReview: {

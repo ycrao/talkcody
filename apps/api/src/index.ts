@@ -15,6 +15,7 @@ import marketplaceRoutes from './routes/marketplace';
 import modelsRoutes from './routes/models';
 import skillRoutes from './routes/skills';
 import skillsMarketplaceRoutes from './routes/skills-marketplace';
+import talkcodyProviderRoutes from './routes/talkcody-provider';
 import updatesRoutes from './routes/updates';
 import userRoutes from './routes/users';
 import type { HonoContext } from './types/context';
@@ -43,7 +44,8 @@ app.use(
     origin: corsOrigins,
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Device-ID', 'X-Requested-With'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposeHeaders: ['X-TalkCody-Remaining-Tokens'],
   })
 );
 
@@ -92,6 +94,7 @@ app.route('/api/users', userRoutes);
 app.route('/api/models', modelsRoutes);
 app.route('/api/updates', updatesRoutes);
 app.route('/api/analytics', analyticsRoutes);
+app.route('/api/talkcody', talkcodyProviderRoutes);
 
 // 404 handler
 app.notFound((c) => {

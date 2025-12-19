@@ -75,7 +75,7 @@ export function PlanReviewCard({ planContent, taskId }: PlanReviewCardProps) {
   }
 
   return (
-    <Card className="border-blue-500/50 bg-blue-500/10 p-4 w-full overflow-hidden">
+    <Card className="@container w-full overflow-hidden border-blue-500/50 bg-blue-500/10 p-4">
       <div className="space-y-4 min-w-0">
         {/* Header */}
         <div>
@@ -116,37 +116,37 @@ export function PlanReviewCard({ planContent, taskId }: PlanReviewCardProps) {
         )}
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
           {showFeedbackInput ? (
             <>
-              <Button variant="outline" onClick={handleCancelFeedback} className="min-w-[100px]">
-                {t.PlanReview.cancel}
+              <Button variant="outline" onClick={handleCancelFeedback}>
+                <span className="hidden @xs:inline">{t.PlanReview.cancel}</span>
+                <X className="size-4 @xs:hidden" />
               </Button>
-              <Button onClick={handleReject} variant="destructive" className="min-w-[100px]">
-                <X className="mr-2 size-4" />
-                {t.PlanReview.submitRejection}
+              <Button onClick={handleReject} variant="destructive">
+                <X className="size-4 flex-shrink-0 @xs:mr-2" />
+                <span className="hidden @xs:inline">{t.PlanReview.submitRejection}</span>
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={handleEdit} className="min-w-[100px]">
-                <Edit2 className="mr-2 size-4" />
-                {isEditing ? t.PlanReview.preview : t.PlanReview.edit}
+              <Button variant="outline" onClick={handleEdit}>
+                <Edit2 className="size-4 flex-shrink-0 @xs:mr-2" />
+                <span className="hidden @xs:inline">
+                  {isEditing ? t.PlanReview.preview : t.PlanReview.edit}
+                </span>
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setShowFeedbackInput(true)}
-                className="min-w-[120px] border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+                className="border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
               >
-                <X className="mr-2 size-4" />
-                {t.PlanReview.rejectAndFeedback}
+                <X className="size-4 flex-shrink-0 @xs:mr-2" />
+                <span className="hidden @xs:inline">{t.PlanReview.rejectAndFeedback}</span>
               </Button>
-              <Button
-                onClick={handleApprove}
-                className="min-w-[100px] bg-green-600 hover:bg-green-700"
-              >
-                <Check className="mr-2 size-4" />
-                {t.PlanReview.approve}
+              <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700">
+                <Check className="size-4 flex-shrink-0 @xs:mr-2" />
+                <span className="hidden @xs:inline">{t.PlanReview.approve}</span>
               </Button>
             </>
           )}

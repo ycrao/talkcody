@@ -847,7 +847,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
             />
 
             <PromptInput
-              className={`${isDragging ? 'ring-2 ring-primary ring-offset-2 bg-accent/50' : ''}`}
+              className={`@container ${isDragging ? 'ring-2 ring-primary ring-offset-2 bg-accent/50' : ''}`}
               onSubmit={handleSubmit}
             >
               <TextareaAutosize
@@ -897,8 +897,10 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                   <AgentSelector disabled={isLoading} />
                   <HoverCard>
                     <HoverCardTrigger asChild>
-                      <div className="flex items-center gap-2 rounded-md border-input bg-background px-3 py-1.5">
-                        <span className="text-xs font-medium">{t.Chat.planMode.label}</span>
+                      <div className="flex items-center gap-1 rounded-md border-input bg-background px-2 py-1.5 @sm:gap-2 @sm:px-3">
+                        <span className="hidden text-xs font-medium @md:inline">
+                          {t.Chat.planMode.label}
+                        </span>
                         <Switch
                           checked={isPlanModeEnabled}
                           onCheckedChange={togglePlanMode}
@@ -926,8 +928,10 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
                   </HoverCard>
                   <HoverCard>
                     <HoverCardTrigger asChild>
-                      <div className="flex items-center gap-2 rounded-md border-input bg-background px-3 py-1.5">
-                        <span className="text-xs font-medium">{t.Chat.worktree.label}</span>
+                      <div className="flex items-center gap-1 rounded-md border-input bg-background px-2 py-1.5 @sm:gap-2 @sm:px-3">
+                        <span className="hidden text-xs font-medium @md:inline">
+                          {t.Chat.worktree.label}
+                        </span>
                         <Switch
                           checked={isWorktreeEnabled}
                           onCheckedChange={toggleWorktreeMode}

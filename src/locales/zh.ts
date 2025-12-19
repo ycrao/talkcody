@@ -866,6 +866,8 @@ const zh: LocaleDefinition = {
   },
 
   Auth: {
+    loginRequired: '使用 TalkCody Free 需要登录',
+    signIn: '登录',
     success: {
       signedIn: '登录成功',
       signedOut: '退出登录成功',
@@ -987,8 +989,8 @@ const zh: LocaleDefinition = {
     feedbackPlaceholder: '描述您希望看到的更改...',
     reviewPrompt: '检查上述更改并选择操作',
     submitFeedback: '提交反馈',
-    allowAllEdits: '允许此对话中的所有编辑',
-    approveAndApply: '批准并应用',
+    allowAllEdits: '允许此Task中的所有编辑',
+    approveAndApply: '批准',
   },
 
   PlanReview: {

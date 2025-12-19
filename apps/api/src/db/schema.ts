@@ -631,3 +631,29 @@ export const analyticsEvents = sqliteTable(
     dateIdx: index('analytics_date_idx').on(table.createdAt),
   })
 );
+
+// ==================== Provider Usage Table ====================
+// Tracks usage for TalkCody provider rate limiting (by user ID)
+export const providerUsage = sqliteTable(
+  'provider_usage',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text('user_id', { length: 255 }).notNull(),
+    provider: text('provider', { length: 50 }).notNull(), // 'talkcody'
+    model: text('model', { length: 100 }).notNull(),
+    inputTokens: integer('input_tokens').default(0).notNull(),
+    outputTokens: integer('output_tokens').default(0).notNull(),
+    totalTokens: integer('total_tokens').default(0).notNull(),
+    usageDate: text('usage_date', { length: 10 }).notNull(), // YYYY-MM-DD format
+    createdAt: integer('created_at')
+      .notNull()
+      .$defaultFn(() => Date.now()),
+  },
+  (table) => ({
+    userDateIdx: index('provider_usage_user_date_idx').on(table.userId, table.usageDate),
+    providerIdx: index('provider_usage_provider_idx').on(table.provider),
+    dateIdx: index('provider_usage_date_idx').on(table.usageDate),
+  })
+);

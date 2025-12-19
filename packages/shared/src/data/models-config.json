@@ -465,6 +465,23 @@
       },
       "context_length": 204800
     },
+    "minimax-m21": {
+      "name": "MiniMax M2.1 Beta",
+      "imageInput": true,
+      "providers": [
+        "talkcody",
+        "MiniMax"
+      ],
+      "providerMappings": {
+        "talkcody": "MiniMax-M2.1",
+        "MiniMax": "MiniMax-M2.1"
+      },
+      "pricing": {
+        "input": "0.00000027",
+        "output": "0.00000115"
+      },
+      "context_length": 204800
+    },
     "gpt-oss:20b": {
       "name": "GPT-OSS 20B (Local)",
       "providers": [

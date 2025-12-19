@@ -152,6 +152,11 @@ export class ProviderRegistry {
       return false;
     }
 
+    // TalkCody Free is always available - auth check happens at usage time
+    if (providerId === 'talkcody') {
+      return true;
+    }
+
     // Local providers (Ollama, LM Studio) use 'enabled' instead of API key
     if (isLocalProvider(providerId)) {
       const result = apiKeys[providerId] === 'enabled';

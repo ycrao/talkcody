@@ -859,6 +859,8 @@ export interface LocaleDefinition {
   };
 
   Auth: {
+    loginRequired: string;
+    signIn: string;
     success: {
       signedIn: string;
       signedOut: string;

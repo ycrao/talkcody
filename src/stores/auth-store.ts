@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { create } from 'zustand';
 import { logger } from '@/lib/logger';
 import { getLocale, type SupportedLocale } from '@/locales';
+import { updateTalkCodyAuthCache } from '@/providers/talkcody-provider';
 import { authService } from '@/services/auth-service';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -86,6 +87,7 @@ export const useAuthStore = create<AuthStore>((set, _get) => ({
         isAuthenticated: false,
         error: null,
       });
+      updateTalkCodyAuthCache(false);
       toast.success(t.Auth.success.signedOut);
     } catch (error) {
       const errorMessage = (error as Error).message;
@@ -123,6 +125,7 @@ export const useAuthStore = create<AuthStore>((set, _get) => ({
           isAuthenticated: true,
           isLoading: false,
         });
+        updateTalkCodyAuthCache(true);
         logger.info('[Auth Store] Auth state updated - user authenticated');
         toast.success(t.Auth.success.signedIn);
       } else {
@@ -237,6 +240,7 @@ export const useAuthStore = create<AuthStore>((set, _get) => ({
           isAuthenticated: true,
           isLoading: false,
         });
+        updateTalkCodyAuthCache(true);
         logger.info('[Auth Store] Fast init: token found, user will be loaded lazily');
       } else {
         set({
@@ -244,6 +248,7 @@ export const useAuthStore = create<AuthStore>((set, _get) => ({
           isAuthenticated: false,
           isLoading: false,
         });
+        updateTalkCodyAuthCache(false);
         logger.info('[Auth Store] Fast init: no token found');
       }
     } catch (error) {
@@ -255,6 +260,7 @@ export const useAuthStore = create<AuthStore>((set, _get) => ({
         isLoading: false,
         error: errorMessage,
       });
+      updateTalkCodyAuthCache(false);
     }
   },
 

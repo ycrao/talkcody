@@ -11,6 +11,9 @@ export interface Env {
   NODE_ENV?: string;
   ENVIRONMENT?: string;
   RELEASES_BUCKET?: R2Bucket;
+  // TalkCody provider configuration
+  MINIMAX_API_KEY?: string;
+  TALKCODY_DAILY_TOKEN_LIMIT?: string;
 }
 
 // Cloudflare R2 Bucket type
@@ -83,6 +86,9 @@ declare global {
       GOOGLE_CLIENT_SECRET: string;
       NODE_ENV?: string;
       ENVIRONMENT?: string;
+      // TalkCody provider configuration
+      MINIMAX_API_KEY?: string;
+      TALKCODY_DAILY_TOKEN_LIMIT?: string;
     }
   }
 }

@@ -7,8 +7,19 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { streamFetch } from '@/lib/tauri-fetch';
 import type { ProviderRegistry } from '@/types';
+import { createTalkCodyProvider } from './talkcody-provider';
 
 export const PROVIDER_CONFIGS: ProviderRegistry = {
+  // TalkCody Free Provider
+  talkcody: {
+    id: 'talkcody',
+    name: 'TalkCody Free',
+    apiKeyName: 'TALKCODY_ENABLED', // Not a real API key, just a flag
+    required: false,
+    type: 'custom',
+    createProvider: () => createTalkCodyProvider(),
+  },
+
   MiniMax: {
     id: 'MiniMax',
     name: 'MiniMax',

@@ -85,7 +85,7 @@ export class DocumentWriterAgent {
       version: DocumentWriterAgent.VERSION,
       systemPrompt: DocumentWriterPromptTemplate,
       tools: selectedTools,
-      hidden: false,
+      hidden: true,
       isDefault: true,
       role: 'write',
       dynamicPrompt: {

@@ -260,7 +260,7 @@ export function FileDiffPreview({
   };
 
   return (
-    <Card className="w-full  mx-auto">
+    <Card className="@container w-full mx-auto">
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -388,38 +388,33 @@ export function FileDiffPreview({
         <Separator />
 
         {/* Action buttons */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {locale.FileDiffPreview.reviewPrompt}
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+        <div className="flex flex-col gap-2 @xl:flex-row @xl:justify-end @xl:gap-3">
+          <Button
+            variant="destructive"
+            onClick={handleReject}
+            disabled={!feedback.trim()}
+            className="flex items-center justify-center gap-2"
+          >
+            <X className="h-4 w-4 flex-shrink-0" />
+            {locale.FileDiffPreview.submitFeedback}
+          </Button>
+          {onAllowAll && (
             <Button
-              variant="destructive"
-              onClick={handleReject}
-              disabled={!feedback.trim()}
-              className="flex items-center gap-2 justify-center"
+              variant="outline"
+              onClick={onAllowAll}
+              className="flex items-center justify-center gap-2 border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
             >
-              <X className="h-4 w-4" />
-              {locale.FileDiffPreview.submitFeedback}
+              <Check className="h-4 w-4 flex-shrink-0" />
+              {locale.FileDiffPreview.allowAllEdits}
             </Button>
-            {onAllowAll && (
-              <Button
-                variant="outline"
-                onClick={onAllowAll}
-                className="flex items-center gap-2 border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950 justify-center"
-              >
-                <Check className="h-4 w-4" />
-                {locale.FileDiffPreview.allowAllEdits}
-              </Button>
-            )}
-            <Button
-              onClick={onApprove}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 justify-center"
-            >
-              <Check className="h-4 w-4" />
-              {locale.FileDiffPreview.approveAndApply}
-            </Button>
-          </div>
+          )}
+          <Button
+            onClick={onApprove}
+            className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700"
+          >
+            <Check className="h-4 w-4 flex-shrink-0" />
+            {locale.FileDiffPreview.approveAndApply}
+          </Button>
         </div>
       </CardContent>
     </Card>

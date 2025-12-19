@@ -15,6 +15,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useMessages } from '@/hooks/use-task';
 import { useTasks } from '@/hooks/use-tasks';
 import { logger } from '@/lib/logger';
+import { parseModelIdentifier } from '@/lib/provider-utils';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
 import { agentRegistry } from '@/services/agents/agent-registry';
@@ -24,6 +25,7 @@ import { executionService } from '@/services/execution-service';
 import { messageService } from '@/services/message-service';
 import { previewSystemPrompt } from '@/services/prompt/preview';
 import { getEffectiveWorkspaceRoot } from '@/services/workspace-root-service';
+import { useAuthStore } from '@/stores/auth-store';
 import { useExecutionStore } from '@/stores/execution-store';
 import { modelService } from '@/stores/provider-store';
 import { settingsManager, useSettingsStore } from '@/stores/settings-store';
@@ -196,6 +198,21 @@ export const ChatBox = forwardRef<ChatBoxRef, ChatBoxProps>(
       }
       const model = await modelService.getCurrentModel();
       logger.info(`Using model "${model}" for message processing`);
+
+      // Check if using TalkCody provider and user is not authenticated
+      const { providerId } = parseModelIdentifier(model);
+      if (providerId === 'talkcody') {
+        const { isAuthenticated, signInWithGitHub } = useAuthStore.getState();
+        if (!isAuthenticated) {
+          toast.info(t.Auth.loginRequired, {
+            action: {
+              label: t.Auth.signIn,
+              onClick: () => signInWithGitHub(),
+            },
+          });
+          return;
+        }
+      }
 
       // Note: isLoading state is now derived from store - startExecution will set it
       setError(null);

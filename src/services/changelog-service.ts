@@ -20,6 +20,22 @@ export interface ChangelogEntry {
 // Only include the most recent versions that users care about
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.1.20',
+    date: '2025-12-19',
+    en: {
+      added: [
+        'MiniMax M2.1 beta model support - all users can try it for free. Select MiniMax M2.1 Beta model with talkcody provider.',
+      ],
+      changed: ['Improved Plan Mode approval and Diff Review UI'],
+    },
+    zh: {
+      added: [
+        'MiniMax M2.1 内测模型支持，所有用户均可免费体验。模型选择 MiniMax M2.1 Beta，提供商选择 talkcody 即可使用。',
+      ],
+      changed: ['优化 Plan Mode 审批和 Diff Review UI'],
+    },
+  },
+  {
     version: '0.1.19',
     date: '2025-12-18',
     en: {
