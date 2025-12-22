@@ -147,6 +147,10 @@ class CustomModelService {
 
     await this.saveCustomModels(config);
 
+    // Clear cache to force fresh load on next read
+    // This ensures other components reading during event handling get the latest data
+    this.memoryCache = null;
+
     // Dispatch event to notify UI
     window.dispatchEvent(new CustomEvent('customModelsUpdated'));
   }
@@ -186,6 +190,10 @@ class CustomModelService {
 
     await this.saveCustomModels(config);
 
+    // Clear cache to force fresh load on next read
+    // This ensures other components reading during event handling get the latest data
+    this.memoryCache = null;
+
     // Dispatch event to notify UI
     window.dispatchEvent(new CustomEvent('customModelsUpdated'));
   }
@@ -197,6 +205,10 @@ class CustomModelService {
     const config = await this.getCustomModels();
     delete config.models[modelId];
     await this.saveCustomModels(config);
+
+    // Clear cache to force fresh load on next read
+    // This ensures other components reading during event handling get the latest data
+    this.memoryCache = null;
 
     // Dispatch event to notify UI
     window.dispatchEvent(new CustomEvent('customModelsUpdated'));

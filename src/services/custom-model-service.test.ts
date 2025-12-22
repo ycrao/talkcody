@@ -427,3 +427,128 @@ describe('CustomModelService - addCustomModel provider merging', () => {
     expect(savedConfig.models['model-3'].providers).toEqual(['providerC']);
   });
 });
+
+describe('CustomModelService - cache invalidation after write operations', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it('should clear cache after addCustomModel so next read gets fresh data', async () => {
+    const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
+    const { customModelService } = await import('./custom-model-service');
+
+    // Setup: initial config
+    const initialConfig = {
+      version: 'custom',
+      models: {},
+    };
+
+    vi.mocked(exists).mockResolvedValue(true);
+    vi.mocked(readTextFile).mockResolvedValue(JSON.stringify(initialConfig));
+    vi.mocked(writeTextFile).mockResolvedValue();
+
+    // Clear cache first
+    customModelService.clearCache();
+
+    // First read - should call readTextFile
+    await customModelService.getCustomModels();
+    expect(readTextFile).toHaveBeenCalledTimes(1);
+
+    // Add a model - this should clear the cache
+    await customModelService.addCustomModel('test-model', {
+      name: 'Test',
+      providers: ['test'],
+      pricing: { input: '0', output: '0' },
+    });
+
+    // Update mock to return new config (simulating file was updated)
+    vi.mocked(readTextFile).mockResolvedValue(
+      JSON.stringify({
+        version: 'custom',
+        models: {
+          'test-model': { name: 'Test', providers: ['test'], pricing: { input: '0', output: '0' } },
+        },
+      })
+    );
+
+    // Next read should call readTextFile again (cache was cleared)
+    await customModelService.getCustomModels();
+    expect(readTextFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('should clear cache after addCustomModels so next read gets fresh data', async () => {
+    const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
+    const { customModelService } = await import('./custom-model-service');
+
+    // Setup: initial config
+    const initialConfig = {
+      version: 'custom',
+      models: {},
+    };
+
+    vi.mocked(exists).mockResolvedValue(true);
+    vi.mocked(readTextFile).mockResolvedValue(JSON.stringify(initialConfig));
+    vi.mocked(writeTextFile).mockResolvedValue();
+
+    // Clear cache first
+    customModelService.clearCache();
+
+    // First read - should call readTextFile
+    await customModelService.getCustomModels();
+    expect(readTextFile).toHaveBeenCalledTimes(1);
+
+    // Add models - this should clear the cache
+    await customModelService.addCustomModels({
+      'test-model': {
+        name: 'Test',
+        providers: ['test'],
+        pricing: { input: '0', output: '0' },
+      },
+    });
+
+    // Next read should call readTextFile again (cache was cleared)
+    await customModelService.getCustomModels();
+    expect(readTextFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('should clear cache after removeCustomModel so next read gets fresh data', async () => {
+    const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
+    const { customModelService } = await import('./custom-model-service');
+
+    // Setup: config with a model
+    const initialConfig = {
+      version: 'custom',
+      models: {
+        'test-model': { name: 'Test', providers: ['test'], pricing: { input: '0', output: '0' } },
+      },
+    };
+
+    vi.mocked(exists).mockResolvedValue(true);
+    vi.mocked(readTextFile).mockResolvedValue(JSON.stringify(initialConfig));
+    vi.mocked(writeTextFile).mockResolvedValue();
+
+    // Clear cache first
+    customModelService.clearCache();
+
+    // First read - should call readTextFile
+    await customModelService.getCustomModels();
+    expect(readTextFile).toHaveBeenCalledTimes(1);
+
+    // Remove the model - this should clear the cache
+    await customModelService.removeCustomModel('test-model');
+
+    // Update mock to return empty config (simulating file was updated)
+    vi.mocked(readTextFile).mockResolvedValue(
+      JSON.stringify({
+        version: 'custom',
+        models: {},
+      })
+    );
+
+    // Next read should call readTextFile again (cache was cleared)
+    const result = await customModelService.getCustomModels();
+    expect(readTextFile).toHaveBeenCalledTimes(2);
+    expect(result.models).toEqual({});
+  });
+});

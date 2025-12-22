@@ -20,17 +20,25 @@ export function useModelSearch({
   searchQuery,
   filterFn,
 }: UseModelSearchOptions): UseModelSearchResult {
-  // Apply filterFn if provided
+  // Apply filterFn and deduplication (always deduplicate, not just during search)
   const filteredByType = useMemo(() => {
-    if (!filterFn) return models;
-    return models.filter(filterFn);
+    const result = filterFn ? models.filter(filterFn) : models;
+
+    // Always apply deduplication based on model key and provider combination
+    const seen = new Set<string>();
+    return result.filter((model) => {
+      const key = `${model.key}-${model.provider}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [models, filterFn]);
 
   // Filter models based on search query
   const filteredModels = useMemo(() => {
     const query = searchQuery.trim();
 
-    // If no search query, return all filtered models
+    // If no search query, return all filtered models (already deduplicated)
     if (!query) {
       return filteredByType;
     }
@@ -41,23 +49,14 @@ export function useModelSearch({
       .filter((term) => term.length > 0);
 
     // Filter models that match all search terms
-    const filtered = filteredByType
-      .filter((model) => {
-        // Create searchable text from model properties
-        const searchableFields = [model.name || '', model.key || ''];
-        const searchableText = searchableFields.join(' ').toLowerCase();
+    return filteredByType.filter((model) => {
+      // Create searchable text from model properties
+      const searchableFields = [model.name || '', model.key || ''];
+      const searchableText = searchableFields.join(' ').toLowerCase();
 
-        // All search terms must be present (AND logic)
-        return searchTerms.every((term) => searchableText.includes(term));
-      })
-      // Remove duplicates based on model key and provider combination
-      .filter((model, index, array) => {
-        const modelKey = `${model.key}-${model.provider}`;
-        const firstIndex = array.findIndex((m) => `${m.key}-${m.provider}` === modelKey);
-        return index === firstIndex;
-      });
-
-    return filtered;
+      // All search terms must be present (AND logic)
+      return searchTerms.every((term) => searchableText.includes(term));
+    });
   }, [filteredByType, searchQuery]);
 
   return {

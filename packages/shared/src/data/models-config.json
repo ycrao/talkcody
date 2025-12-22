@@ -431,8 +431,7 @@
       "providers": [
         "zhipu",
         "openRouter",
-        "aiGateway",
-        "ollama"
+        "aiGateway"
       ],
       "providerMappings": {
         "zhipu": "glm-4.6v",

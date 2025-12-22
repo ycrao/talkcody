@@ -106,45 +106,6 @@ export class ModelService {
   }
 
   /**
-   * Get available models synchronously (for performance-critical scenarios)
-   */
-  getAvailableModelsSync(): AvailableModel[] {
-    let apiKeys: ApiKeySettings;
-    try {
-      apiKeys = settingsManager.getApiKeysSync();
-    } catch {
-      // Fallback to empty keys if settings not initialized
-      apiKeys = {};
-    }
-
-    const availableModels: AvailableModel[] = [];
-
-    // Iterate through all models
-    for (const [modelKey, modelConfig] of Object.entries(MODEL_CONFIGS)) {
-      if (!modelConfig) continue;
-
-      // Find all available providers for this model (not just the best one)
-      const providers = getProvidersForModel(modelKey);
-      const availableProviders = this.getAllAvailableProviders(providers, apiKeys);
-
-      // Create a model entry for each available provider
-      for (const provider of availableProviders) {
-        availableModels.push({
-          key: modelKey,
-          name: modelConfig.name,
-          provider: provider.id,
-          providerName: provider.name,
-          imageInput: modelConfig.imageInput ?? false,
-          imageOutput: modelConfig.imageOutput ?? false,
-          audioInput: modelConfig.audioInput ?? false,
-        });
-      }
-    }
-
-    return availableModels.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  /**
    * Get the best provider for a specific model
    */
   async getBestProviderForModel(modelKey: string): Promise<string | null> {

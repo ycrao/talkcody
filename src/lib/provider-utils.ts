@@ -175,6 +175,8 @@ export function createProviders(
 
 /**
  * Compute available models based on API keys and provider configs
+ * Uses Map for O(1) deduplication to prevent duplicate entries when
+ * the same model exists in both built-in MODEL_CONFIGS and customModels
  */
 export function computeAvailableModels(
   apiKeys: Record<string, string | undefined>,
@@ -182,9 +184,18 @@ export function computeAvailableModels(
   customProviders: CustomProviderConfig[],
   customModels: Record<string, ModelConfig>
 ): AvailableModel[] {
-  const availableModels: AvailableModel[] = [];
+  // Use Map for O(1) deduplication lookup - key is "${modelKey}-${providerId}"
+  const modelMap = new Map<string, AvailableModel>();
 
-  // 1. Iterate through all built-in models
+  // Helper to add model only if not already exists (built-in models take priority)
+  const addModel = (model: AvailableModel) => {
+    const key = `${model.key}-${model.provider}`;
+    if (!modelMap.has(key)) {
+      modelMap.set(key, model);
+    }
+  };
+
+  // 1. Iterate through all built-in models (added first, so they take priority)
   for (const [modelKey, modelConfig] of Object.entries(MODEL_CONFIGS)) {
     if (!modelConfig) continue;
 
@@ -202,7 +213,7 @@ export function computeAvailableModels(
 
     // Create a model entry for each available provider
     for (const provider of availableProviders) {
-      availableModels.push({
+      addModel({
         key: modelKey,
         name: modelConfig.name,
         provider: provider.id,
@@ -214,7 +225,7 @@ export function computeAvailableModels(
     }
   }
 
-  // 2. Add custom models
+  // 2. Add custom models (skip if already exists from built-in)
   const customProviderIds = new Set(customProviders.filter((p) => p.enabled).map((p) => p.id));
 
   for (const [modelKey, modelConfig] of Object.entries(customModels)) {
@@ -237,7 +248,7 @@ export function computeAvailableModels(
           }
         }
 
-        availableModels.push({
+        addModel({
           key: modelKey,
           name: modelConfig.name,
           provider: providerId,
@@ -250,8 +261,8 @@ export function computeAvailableModels(
     }
   }
 
-  // Sort by name
-  return availableModels.sort((a, b) => a.name.localeCompare(b.name));
+  // Sort by name and return
+  return Array.from(modelMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**

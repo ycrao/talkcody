@@ -1,6 +1,12 @@
 name: Release Windows
 
 on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit SHA or branch to build (leave empty for current branch)'
+        required: false
+        default: ''
   push:
     tags:
       - 'v*-windows'
@@ -12,7 +18,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    if: github.repository == 'talkcody/talkcody'
+    if: github.event_name == 'push' && github.repository == 'talkcody/talkcody'
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.version }}
@@ -48,10 +54,13 @@ jobs:
   build-windows:
     name: Build Windows MSI
     needs: create-release
+    if: always() && github.repository == 'talkcody/talkcody'
     runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -72,7 +81,11 @@ jobs:
       - name: Build frontend
         run: bun run build
 
-      - name: Build Tauri app
+      - name: Install jq
+        run: choco install jq -y
+
+      - name: Build Tauri app (with updater artifacts)
+        if: github.event_name == 'push'
         run: |
           jq '.bundle.createUpdaterArtifacts = true' src-tauri/tauri.conf.json > /tmp/tauri.conf.json.tmp
           mv /tmp/tauri.conf.json.tmp src-tauri/tauri.conf.json
@@ -82,18 +95,23 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      - name: Build Tauri app (test build)
+        if: github.event_name == 'workflow_dispatch'
+        run: bun run tauri build
+        shell: bash
+
       - name: Setup Node.js for wrangler
+        if: github.event_name == 'push'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install wrangler
+        if: github.event_name == 'push'
         run: npm install -g wrangler
 
-      - name: Install jq
-        run: choco install jq -y
-
       - name: Run release script (Windows)
+        if: github.event_name == 'push'
         run: |
           $env:PLATFORM = "windows"
           $env:ARCH = "x86_64"
@@ -102,7 +120,7 @@ jobs:
           $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
           $env:CLOUDFLARE_API_TOKEN = "${{ secrets.CLOUDFLARE_API_TOKEN }}"
           $env:CLOUDFLARE_ACCOUNT_ID = "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
-          
+
           # Convert Windows path to Unix path for bash
           bash .github/scripts/release.sh
         shell: pwsh
@@ -125,7 +143,16 @@ jobs:
           echo "msi_name=$msiPath" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
+      - name: Upload MSI as Artifact (test build)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: talkcody-windows-${{ github.sha }}
+          path: src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 7
+
       - name: Upload MSI to Release
+        if: github.event_name == 'push'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -136,6 +163,7 @@ jobs:
           asset_content_type: application/octet-stream
 
       - name: Get updater bundle path
+        if: github.event_name == 'push'
         id: get_bundle
         run: |
           $bundlePath = (Get-ChildItem -Path "src-tauri\target\release\bundle\msi" -Name "*.msi.tar.gz" -not -Name "*.sig" | Select-Object -First 1)
@@ -149,6 +177,7 @@ jobs:
         shell: pwsh
 
       - name: Upload updater bundle to Release
+        if: github.event_name == 'push'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
