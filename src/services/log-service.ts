@@ -3,7 +3,7 @@ import { exists, readTextFile } from '@tauri-apps/plugin-fs';
 import { logger } from '@/lib/logger';
 
 export class LogService {
-  private logFileName = 'talkcody.log';
+  private logFileName = 'TalkCody.log';
 
   /**
    * Get platform-specific log directory path
