@@ -17,8 +17,8 @@ export class LogService {
         return join(home, 'Library', 'Logs', 'com.talkcody');
       case 'windows': {
         // Windows
-        const appData = await appDataDir();
-        return join(appData, 'logs');
+        // const appData = await appDataDir();
+        return join(home, 'AppData', 'Local', 'com.talkcody', 'logs');
       }
       default: // Linux and others
         return join(home, '.local', 'share', 'com.talkcody', 'logs');
