@@ -1,4 +1,4 @@
-import type { ModelMessage, ToolSet } from 'ai';
+import type { ModelMessage } from 'ai';
 import type { ModelType } from './model-types';
 import type { ToolInput, ToolOutput, ToolWithUI } from './tool';
 
@@ -47,6 +47,7 @@ export interface ConvertMessagesOptions {
   rootPath?: string;
   systemPrompt?: string;
   model?: string;
+  providerId?: string;
 }
 
 export interface AgentLoopOptions {

@@ -17,6 +17,8 @@ mod code_navigation;
 mod analytics;
 mod lint;
 mod background_tasks;
+mod lsp;
+mod oauth_callback_server;
 
 use file_watcher::FileWatcher;
 use window_manager::{WindowRegistry, WindowState, create_window};
@@ -49,9 +51,11 @@ struct AppState {
     window_registry: WindowRegistry,
 }
 
+/// Legacy start_file_watching command - broadcasts to all windows
+/// Prefer using start_window_file_watching for multi-window support
 #[tauri::command]
 fn start_file_watching(path: String, app_handle: AppHandle, state: State<AppState>) -> Result<(), String> {
-    log::info!("Starting file watching for path: {}", path);
+    log::info!("Starting file watching for path: {} (legacy broadcast mode)", path);
     let mut watcher_guard = state.file_watcher.lock().map_err(|e| e.to_string())?;
 
     // Stop any existing watcher properly
@@ -60,9 +64,9 @@ fn start_file_watching(path: String, app_handle: AppHandle, state: State<AppStat
         watcher.stop();
     }
 
-    // Create new watcher
+    // Create new watcher - no window_label means broadcast to all windows
     let mut watcher = FileWatcher::new().map_err(|e| e.to_string())?;
-    watcher.watch_directory(&path, app_handle).map_err(|e| e.to_string())?;
+    watcher.watch_directory(&path, app_handle, None).map_err(|e| e.to_string())?;
 
     *watcher_guard = Some(watcher);
     log::info!("File watching started successfully for: {}", path);
@@ -230,7 +234,8 @@ fn start_window_file_watching(
 
     // Create new watcher
     let mut watcher = FileWatcher::new().map_err(|e| e.to_string())?;
-    watcher.watch_directory(&path, app_handle).map_err(|e| e.to_string())?;
+    // Pass window_label so events are emitted only to this specific window
+    watcher.watch_directory(&path, app_handle, Some(window_label.clone())).map_err(|e| e.to_string())?;
 
     // Set watcher for this window
     state.window_registry.set_window_file_watcher(&window_label, Some(watcher))?;
@@ -788,6 +793,11 @@ pub fn run() {
             let code_nav_state = CodeNavState(RwLock::new(CodeNavigationService::new()));
             app.manage(code_nav_state);
 
+            // Initialize LSP state
+            log::info!("Initializing LSP state");
+            let lsp_state = lsp::LspState(tokio::sync::Mutex::new(lsp::LspRegistry::new()));
+            app.manage(lsp_state);
+
             // Start analytics session
             let app_version = app.package_info().version.to_string();
             let app_data_dir_clone = app_data_dir.clone();
@@ -968,6 +978,17 @@ pub fn run() {
             background_tasks::kill_background_task,
             background_tasks::list_background_tasks,
             background_tasks::cleanup_background_tasks,
+            // LSP commands
+            lsp::lsp_start_server,
+            lsp::lsp_send_message,
+            lsp::lsp_stop_server,
+            lsp::lsp_list_servers,
+            lsp::lsp_check_server_available,
+            lsp::lsp_get_server_config,
+            lsp::lsp_get_server_status,
+            lsp::lsp_download_server,
+            // OAuth callback server
+            oauth_callback_server::start_oauth_callback_server,
         ])
         .on_window_event(|window, event| {
             // Clean up resources when main window is destroyed

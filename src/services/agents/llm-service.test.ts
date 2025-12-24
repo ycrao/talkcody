@@ -5,6 +5,7 @@
 
 import type { AssistantModelMessage, ToolModelMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
+import { buildOpenAIProviderOptions, OPENAI_FALLBACK_INSTRUCTIONS } from './openai-provider-options';
 import type { ToolCallInfo } from './tool-executor';
 
 describe('LLMService - empty tool calls bug fix', () => {
@@ -389,6 +390,28 @@ describe('LLMService - parallel tool calls message structure', () => {
     // This is correct - 1 assistant message with all tool calls
     expect(newMessages.filter((m) => m.role === 'assistant')).toHaveLength(1);
     expect((newMessages[0].content as Array<unknown>)).toHaveLength(2);
+  });
+});
+
+describe('LLMService - OpenAI provider options', () => {
+  it('should include system prompt as OpenAI instructions', () => {
+    const options = buildOpenAIProviderOptions({
+      enableReasoning: true,
+      systemPrompt: 'System level guidance',
+    });
+
+    expect(options.instructions).toBe('System level guidance');
+    expect(options.reasoningEffort).toBe('medium');
+  });
+
+  it('should fall back to default instructions when system prompt is empty', () => {
+    const options = buildOpenAIProviderOptions({
+      enableReasoning: false,
+      systemPrompt: '   ',
+    });
+
+    expect(options.instructions).toBe(OPENAI_FALLBACK_INSTRUCTIONS);
+    expect(options.reasoningEffort).toBeUndefined();
   });
 });
 

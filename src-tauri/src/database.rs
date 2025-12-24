@@ -76,7 +76,7 @@ impl Database {
             let sql_trimmed = sql.trim_start().to_uppercase();
             let result = if sql_trimmed.starts_with("SELECT") || sql_trimmed.starts_with("PRAGMA") {
                 // This is a query that returns rows, use query() instead
-                let mut stmt = match conn.prepare(sql).await {
+                let stmt = match conn.prepare(sql).await {
                     Ok(stmt) => stmt,
                     Err(e) => {
                         let error_msg = format!("Prepare error: {}", e);
@@ -161,7 +161,7 @@ impl Database {
             .map(|v| json_to_libsql_value(v))
             .collect();
 
-        let mut stmt = conn
+        let stmt = conn
             .prepare(sql)
             .await
             .map_err(|e| format!("Prepare error: {}", e))?;

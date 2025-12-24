@@ -13,11 +13,12 @@ import { logger } from '@/lib/logger';
 import { convertToAnthropicFormat } from '@/lib/message-convert';
 import { MessageTransform } from '@/lib/message-transform';
 import { validateAnthropicMessages } from '@/lib/message-validate';
-import { getContextLength } from '@/lib/models';
 import { getToolSync } from '@/lib/tools';
 import { generateId } from '@/lib/utils';
 import { getLocale, type SupportedLocale } from '@/locales';
-import { modelTypeService } from '@/services/model-type-service';
+import { getContextLength } from '@/providers/config/model-config';
+import { parseModelIdentifier } from '@/providers/core/provider-utils';
+import { modelTypeService } from '@/providers/models/model-type-service';
 import { getEffectiveWorkspaceRoot } from '@/services/workspace-root-service';
 import { usePlanModeStore } from '@/stores/plan-mode-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -31,6 +32,7 @@ import type {
   UIMessage,
 } from '../../types/agent';
 import { aiPricingService } from '../ai-pricing-service';
+import { buildOpenAIProviderOptions } from './openai-provider-options';
 
 /**
  * Callbacks for agent loop
@@ -199,10 +201,12 @@ export class LLMService {
         };
 
         // Convert initial messages to model format
+        const { providerId } = parseModelIdentifier(model);
         const modelMessages = await convertMessages(inputMessages, {
           rootPath,
           systemPrompt,
           model,
+          providerId: providerId ?? undefined,
         });
 
         // Validate and convert to Anthropic-compliant format
@@ -355,24 +359,31 @@ export class LLMService {
                 });
               }
 
-              // Only enable thinking when isThink is true and not image generator
-              const providerOptions =
-                isImageGenerator || !isThink
-                  ? undefined
-                  : {
-                      google: {
-                        thinkingConfig: {
-                          thinkingBudget: 8192,
-                          includeThoughts: true,
-                        },
-                      },
-                      anthropic: {
-                        thinking: { type: 'enabled', budgetTokens: 12_000 },
-                      },
-                      openai: {
-                        reasoningEffort: 'medium',
-                      },
-                    };
+              const enableReasoningOptions = !isImageGenerator && isThink;
+              const providerOptionsMap: Record<string, unknown> = {};
+
+              if (enableReasoningOptions) {
+                providerOptionsMap.google = {
+                  thinkingConfig: {
+                    thinkingBudget: 8192,
+                    includeThoughts: true,
+                  },
+                };
+                providerOptionsMap.anthropic = {
+                  thinking: { type: 'enabled', budgetTokens: 12_000 },
+                };
+              }
+
+              if (!isImageGenerator) {
+                providerOptionsMap.openai = buildOpenAIProviderOptions({
+                  enableReasoning: enableReasoningOptions,
+                  systemPrompt,
+                });
+              }
+
+              // biome-ignore lint/suspicious/noExplicitAny: providerOptions type varies by provider
+              const providerOptions: any =
+                Object.keys(providerOptionsMap).length > 0 ? providerOptionsMap : undefined;
 
               streamResult = streamText({
                 model: providerModel,
@@ -506,18 +517,20 @@ export class LLMService {
                   case 'reasoning-start':
                     streamProcessor.processReasoningStart(
                       (delta as { id: string }).id,
+                      (delta as { providerMetadata?: Record<string, unknown> }).providerMetadata,
                       streamCallbacks
                     );
                     break;
                   case 'reasoning-delta':
-                    if (delta.text) {
-                      streamProcessor.processReasoningDelta(
-                        (delta as { id: string }).id || 'default',
-                        delta.text,
-                        streamContext,
-                        streamCallbacks
-                      );
-                    }
+                    // Always process reasoning-delta even if text is empty
+                    // because signature is delivered via providerMetadata with empty text
+                    streamProcessor.processReasoningDelta(
+                      (delta as { id: string }).id || 'default',
+                      delta.text || '',
+                      (delta as { providerMetadata?: Record<string, unknown> }).providerMetadata,
+                      streamContext,
+                      streamCallbacks
+                    );
                     break;
                   case 'reasoning-end':
                     streamProcessor.processReasoningEnd(
@@ -771,12 +784,20 @@ export class LLMService {
             });
 
             // Apply provider-specific transformation (e.g., DeepSeek reasoning_content)
-            const transformed = MessageTransform.transformAssistantContent(assistantContent, model);
+            const { providerId: pid } = parseModelIdentifier(model);
+            const { transformedContent } = MessageTransform.transform(
+              loopState.messages,
+              model,
+              pid ?? undefined,
+              assistantContent
+            );
 
             const assistantMessage: AssistantModelMessage = {
               role: 'assistant',
-              content: [...transformed.content, ...toolCallParts],
-              ...(transformed.providerOptions && { providerOptions: transformed.providerOptions }),
+              content: [...(transformedContent?.content ?? assistantContent), ...toolCallParts],
+              ...(transformedContent?.providerOptions && {
+                providerOptions: transformedContent.providerOptions,
+              }),
             };
             loopState.messages.push(assistantMessage);
 

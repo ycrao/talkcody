@@ -7,8 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@talkcody/shared': path.resolve(__dirname, './packages/shared/src/index.ts'),
-      '@talkcody/shared/': path.resolve(__dirname, './packages/shared/src/'),
+      '@talkcody/shared': path.resolve(__dirname, './packages/shared/src'),
       // Bypass monaco-editor ESM resolution issues in tests
       'monaco-editor': path.resolve(__dirname, './src/test/mocks/monaco-editor.ts'),
     },

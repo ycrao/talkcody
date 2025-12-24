@@ -14,7 +14,7 @@ vi.mock('@/lib/logger', () => {
   };
 });
 
-vi.mock('@/services/ai-provider-service', () => ({
+vi.mock('@/providers/core/provider-factory', () => ({
   aiProviderService: {
     getProviderByModel: vi.fn(),
     getProviderModel: vi.fn(),

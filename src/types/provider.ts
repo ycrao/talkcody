@@ -19,6 +19,7 @@ export interface ProviderDefinition {
   baseUrl?: string;
   required?: boolean;
   type: ProviderType;
+  // biome-ignore lint/suspicious/noExplicitAny: Provider return types vary by implementation
   createProvider?: (apiKey: string, baseUrl?: string) => any;
   isCustom?: boolean;
   customConfig?: CustomProviderConfig;
@@ -26,6 +27,8 @@ export interface ProviderDefinition {
   supportsCodingPlan?: boolean;
   /** Custom base URL to use when Coding Plan is enabled */
   codingPlanBaseUrl?: string;
+  /** Whether this provider supports OAuth authentication (e.g., Claude Pro/Max) */
+  supportsOAuth?: boolean;
 }
 
 export interface ProviderRegistry {

@@ -23,14 +23,14 @@ vi.mock('../lib/logger', () => ({
   },
 }));
 
-vi.mock('../services/model-service', () => ({
+vi.mock('@/providers/models/model-service', () => ({
   modelService: {
     isModelAvailableSync: vi.fn().mockReturnValue(true),
     getBestProviderForModelSync: vi.fn().mockReturnValue('test-provider'),
   },
 }));
 
-vi.mock('../services/ai-provider-service', () => ({
+vi.mock('@/providers/core/provider-factory', () => ({
   aiProviderService: {
     getProviderModel: vi.fn(),
   },
@@ -101,8 +101,8 @@ vi.mock('../lib/llm-utils', () => ({
     .mockImplementation((text, isFirst) => (isFirst ? `\n<thinking>\n${text}` : text)),
 }));
 
-vi.mock('../lib/models', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/models')>();
+vi.mock('@/providers/config/model-config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/providers/config/model-config')>();
   return {
     ...actual,
     getContextLength: vi.fn().mockReturnValue(200000),
@@ -353,11 +353,11 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
     vi.clearAllMocks();
 
     // Re-establish mocks after clearing
-    const { modelService } = await import('../services/model-service');
+    const { modelService } = await import('@/providers/models/model-service');
     vi.mocked(modelService.isModelAvailableSync).mockReturnValue(true);
     vi.mocked(modelService.getBestProviderForModelSync).mockReturnValue('test-provider');
 
-    const { aiProviderService } = await import('../services/ai-provider-service');
+    const { aiProviderService } = await import('@/providers/core/provider-factory');
     vi.mocked(aiProviderService.getProviderModel).mockReturnValue({});
 
     const { convertMessages, formatReasoningText } = await import('../lib/llm-utils');
@@ -1008,7 +1008,7 @@ The user engaged in a conversation about testing the MessageCompactor.
 
     it('should handle compression with shouldCompress check', async () => {
       // Re-establish the getContextLength mock to ensure it returns 200000
-      const { getContextLength } = await import('../lib/models');
+      const { getContextLength } = await import('@/providers/config/model-config');
       vi.mocked(getContextLength).mockReturnValue(200000);
 
       const messageCompactor = new MessageCompactor({

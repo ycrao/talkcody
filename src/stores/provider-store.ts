@@ -3,19 +3,20 @@
 
 import { create } from 'zustand';
 import { logger } from '@/lib/logger';
-import { ensureModelsInitialized, MODEL_CONFIGS } from '@/lib/models';
+import { ensureModelsInitialized, MODEL_CONFIGS } from '@/providers/config/model-config';
+import { PROVIDER_CONFIGS, PROVIDERS_WITH_CODING_PLAN } from '@/providers/config/provider-config';
 import {
   buildProviderConfigs,
   isModelAvailable as checkModelAvailable,
   computeAvailableModels,
   createProviders,
   getBestProvider,
+  type OAuthConfig,
   type ProviderFactory,
   parseModelIdentifier,
   resolveProviderModelName,
-} from '@/lib/provider-utils';
-import { PROVIDER_CONFIGS, PROVIDERS_WITH_CODING_PLAN } from '@/providers/provider_config';
-import { modelSyncService } from '@/services/model-sync-service';
+} from '@/providers/core/provider-utils';
+import { modelSyncService } from '@/providers/models/model-sync-service';
 import type { ProviderDefinition } from '@/types';
 import type { AvailableModel } from '@/types/api-keys';
 import type { CustomProviderConfig } from '@/types/custom-provider';
@@ -45,6 +46,9 @@ interface ProviderStoreState {
 
   // Custom models from file
   customModels: Record<string, ModelConfig>;
+
+  // OAuth configuration (for Claude Pro/Max)
+  oauthConfig: OAuthConfig;
 
   // Computed available models
   availableModels: AvailableModel[];
@@ -129,18 +133,44 @@ async function loadUseCodingPlanSettings(): Promise<Map<string, boolean>> {
 }
 
 async function loadCustomProviders(): Promise<CustomProviderConfig[]> {
-  const { customProviderService } = await import('@/services/custom-provider-service');
+  const { customProviderService } = await import('@/providers/custom/custom-provider-service');
 
   return customProviderService.getEnabledCustomProviders();
 }
 
 async function loadCustomModels(): Promise<Record<string, ModelConfig>> {
   try {
-    const { customModelService } = await import('@/services/custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
     const config = await customModelService.getCustomModels();
     return config.models;
   } catch (error) {
     logger.warn('Failed to load custom models:', error);
+    return {};
+  }
+}
+
+async function loadOAuthConfig(): Promise<OAuthConfig> {
+  try {
+    // Load Claude OAuth
+    const { getClaudeOAuthAccessToken } = await import('@/providers/oauth/claude-oauth-store');
+    const anthropicAccessToken = await getClaudeOAuthAccessToken();
+
+    // Load OpenAI OAuth - use helper function like Claude OAuth
+    const { getOpenAIOAuthAccessToken } = await import('@/providers/oauth/openai-oauth-store');
+    const openaiAccessToken = await getOpenAIOAuthAccessToken();
+
+    // Get additional OpenAI OAuth state (accountId) if connected
+    const { useOpenAIOAuthStore } = await import('@/providers/oauth/openai-oauth-store');
+    const openaiStoreState = useOpenAIOAuthStore.getState();
+    const openaiAccountId = openaiStoreState.accountId;
+
+    return {
+      anthropicAccessToken,
+      openaiAccessToken,
+      openaiAccountId,
+    };
+  } catch (error) {
+    logger.warn('Failed to load OAuth config:', error);
     return {};
   }
 }
@@ -166,6 +196,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   useCodingPlanSettings: new Map(),
   customProviders: [],
   customModels: {},
+  oauthConfig: {},
   availableModels: [],
   isInitialized: false,
   isLoading: false,
@@ -193,14 +224,15 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
         logger.warn('[ProviderStore] Model sync initialization failed:', err);
       });
 
-      // Load all data in parallel
-      const [apiKeys, baseUrls, useCodingPlanSettings, customProviders, customModels] =
+      // Load all data in parallel (including OAuth)
+      const [apiKeys, baseUrls, useCodingPlanSettings, customProviders, customModels, oauthConfig] =
         await Promise.all([
           loadApiKeys(),
           loadBaseUrls(),
           loadUseCodingPlanSettings(),
           loadCustomProviders(),
           loadCustomModels(),
+          loadOAuthConfig(),
         ]);
 
       logger.info('[ProviderStore] Data loaded', {
@@ -208,20 +240,28 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
         baseUrlCount: baseUrls.size,
         customProviderCount: customProviders.length,
         customModelCount: Object.keys(customModels).length,
+        hasOAuth: !!oauthConfig.anthropicAccessToken,
       });
 
       // Build provider configs (built-in + custom)
       const providerConfigs = buildProviderConfigs(customProviders);
 
-      // Create provider instances
-      const providers = createProviders(apiKeys, providerConfigs, baseUrls, useCodingPlanSettings);
+      // Create provider instances (with OAuth support)
+      const providers = createProviders(
+        apiKeys,
+        providerConfigs,
+        baseUrls,
+        useCodingPlanSettings,
+        oauthConfig
+      );
 
-      // Compute available models
+      // Compute available models (with OAuth support)
       const availableModels = computeAvailableModels(
         apiKeys,
         providerConfigs,
         customProviders,
-        customModels
+        customModels,
+        oauthConfig
       );
 
       logger.info('[ProviderStore] Initialization complete', {
@@ -237,6 +277,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
         useCodingPlanSettings,
         customProviders,
         customModels,
+        oauthConfig,
         availableModels,
         isInitialized: true,
         isLoading: false,
@@ -259,7 +300,8 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
     // Use explicit provider if specified, otherwise find best available
     const providerId =
-      explicitProviderId || getBestProvider(modelKey, state.apiKeys, state.customProviders);
+      explicitProviderId ||
+      getBestProvider(modelKey, state.apiKeys, state.customProviders, state.oauthConfig);
 
     if (!providerId) {
       throw new Error(
@@ -269,21 +311,11 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
     const provider = state.providers.get(providerId);
     if (!provider) {
-      // Check if this might be a custom provider that was deleted
-      const isCustomProvider =
-        providerId.startsWith('openai-compatible-') || providerId.startsWith('anthropic-');
-
-      if (isCustomProvider) {
-        throw new Error(
-          `Custom provider "${providerId}" not found. It may have been deleted. ` +
-            `Please select a different model in settings.`
-        );
-      }
-
       throw new Error(`Provider ${providerId} not initialized for model: ${modelKey}`);
     }
 
-    // Resolve provider-specific model name
+    // For OpenAI OAuth, we need to ensure the token is valid when making API calls
+    // This is handled by the provider's custom fetch function
     const providerModelName = resolveProviderModelName(modelKey, providerId);
     return provider(providerModelName);
   },
@@ -291,13 +323,18 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
   // Check if model is available (synchronous)
   isModelAvailable: (modelIdentifier: string) => {
     const state = get();
-    return checkModelAvailable(modelIdentifier, state.apiKeys, state.customProviders);
+    return checkModelAvailable(
+      modelIdentifier,
+      state.apiKeys,
+      state.customProviders,
+      state.oauthConfig
+    );
   },
 
   // Get best provider for a model (synchronous)
   getBestProviderForModel: (modelKey: string) => {
     const state = get();
-    return getBestProvider(modelKey, state.apiKeys, state.customProviders);
+    return getBestProvider(modelKey, state.apiKeys, state.customProviders, state.oauthConfig);
   },
 
   // Set API key and rebuild providers
@@ -314,13 +351,15 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
       newApiKeys,
       state.providerConfigs,
       state.baseUrls,
-      state.useCodingPlanSettings
+      state.useCodingPlanSettings,
+      state.oauthConfig
     );
     const availableModels = computeAvailableModels(
       newApiKeys,
       state.providerConfigs,
       state.customProviders,
-      state.customModels
+      state.customModels,
+      state.oauthConfig
     );
 
     logger.info('[ProviderStore] API key updated', {
@@ -356,7 +395,8 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
       state.apiKeys,
       state.providerConfigs,
       newBaseUrls,
-      state.useCodingPlanSettings
+      state.useCodingPlanSettings,
+      state.oauthConfig
     );
 
     logger.info('[ProviderStore] Base URL updated', {
@@ -372,7 +412,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
   // Add custom provider
   addCustomProvider: async (config: CustomProviderConfig) => {
-    const { customProviderService } = await import('@/services/custom-provider-service');
+    const { customProviderService } = await import('@/providers/custom/custom-provider-service');
     await customProviderService.addCustomProvider(config.id, config);
 
     // Reload and rebuild
@@ -381,7 +421,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
   // Update custom provider
   updateCustomProvider: async (providerId: string, config: Partial<CustomProviderConfig>) => {
-    const { customProviderService } = await import('@/services/custom-provider-service');
+    const { customProviderService } = await import('@/providers/custom/custom-provider-service');
     await customProviderService.updateCustomProvider(providerId, config);
 
     // Reload and rebuild
@@ -390,7 +430,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
 
   // Remove custom provider
   removeCustomProvider: async (providerId: string) => {
-    const { customProviderService } = await import('@/services/custom-provider-service');
+    const { customProviderService } = await import('@/providers/custom/custom-provider-service');
     await customProviderService.removeCustomProvider(providerId);
 
     // Reload and rebuild
@@ -402,29 +442,38 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
     logger.info('[ProviderStore] Refreshing all state...');
 
     try {
-      // Reload all data
-      const [apiKeys, baseUrls, useCodingPlanSettings, customProviders, customModels] =
+      // Reload all data (including OAuth)
+      const [apiKeys, baseUrls, useCodingPlanSettings, customProviders, customModels, oauthConfig] =
         await Promise.all([
           loadApiKeys(),
           loadBaseUrls(),
           loadUseCodingPlanSettings(),
           loadCustomProviders(),
           loadCustomModels(),
+          loadOAuthConfig(),
         ]);
 
       // Rebuild everything
       const providerConfigs = buildProviderConfigs(customProviders);
-      const providers = createProviders(apiKeys, providerConfigs, baseUrls, useCodingPlanSettings);
+      const providers = createProviders(
+        apiKeys,
+        providerConfigs,
+        baseUrls,
+        useCodingPlanSettings,
+        oauthConfig
+      );
       const availableModels = computeAvailableModels(
         apiKeys,
         providerConfigs,
         customProviders,
-        customModels
+        customModels,
+        oauthConfig
       );
 
       logger.info('[ProviderStore] Refresh complete', {
         providerCount: providers.size,
         availableModelCount: availableModels.length,
+        hasOAuth: !!oauthConfig.anthropicAccessToken,
       });
 
       set({
@@ -435,6 +484,7 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
         useCodingPlanSettings,
         customProviders,
         customModels,
+        oauthConfig,
         availableModels,
       });
     } catch (error) {
@@ -450,13 +500,15 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
       state.apiKeys,
       state.providerConfigs,
       state.baseUrls,
-      state.useCodingPlanSettings
+      state.useCodingPlanSettings,
+      state.oauthConfig
     );
     const availableModels = computeAvailableModels(
       state.apiKeys,
       state.providerConfigs,
       state.customProviders,
-      state.customModels
+      state.customModels,
+      state.oauthConfig
     );
 
     logger.info('[ProviderStore] Providers rebuilt', {
@@ -530,7 +582,7 @@ export const modelService = {
   getCurrentModel: async () => {
     const { settingsManager } = await import('@/stores/settings-store');
     const { agentRegistry } = await import('@/services/agents/agent-registry');
-    const { modelTypeService } = await import('@/services/model-type-service');
+    const { modelTypeService } = await import('@/providers/models/model-type-service');
 
     const agentId = await settingsManager.getAgentId();
     let agent = await agentRegistry.getWithResolvedTools(agentId);

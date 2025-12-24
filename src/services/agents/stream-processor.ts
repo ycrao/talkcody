@@ -26,6 +26,7 @@ export interface StreamProcessorContext {
 export interface ReasoningBlock {
   id: string;
   text: string;
+  providerMetadata?: Record<string, unknown>; // For storing signature/redactedData from Claude API
 }
 
 export interface StreamProcessorState {
@@ -169,6 +170,42 @@ export class StreamProcessor {
   }
 
   /**
+   * Deep merge providerMetadata objects
+   * This is needed because signature arrives in a separate delta event
+   * and we need to merge it with existing metadata (e.g., redactedData)
+   */
+  private deepMergeMetadata(
+    existing: Record<string, unknown> | undefined,
+    incoming: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (!existing) return incoming;
+
+    const result: Record<string, unknown> = { ...existing };
+    for (const key of Object.keys(incoming)) {
+      const existingValue = existing[key];
+      const incomingValue = incoming[key];
+
+      // Deep merge objects, replace primitives
+      if (
+        typeof existingValue === 'object' &&
+        existingValue !== null &&
+        typeof incomingValue === 'object' &&
+        incomingValue !== null &&
+        !Array.isArray(existingValue) &&
+        !Array.isArray(incomingValue)
+      ) {
+        result[key] = this.deepMergeMetadata(
+          existingValue as Record<string, unknown>,
+          incomingValue as Record<string, unknown>
+        );
+      } else {
+        result[key] = incomingValue;
+      }
+    }
+    return result;
+  }
+
+  /**
    * Reset current step text (should be called at the start of each iteration)
    */
   resetCurrentStepText(): void {
@@ -291,12 +328,16 @@ export class StreamProcessor {
   /**
    * Process reasoning-start event
    */
-  processReasoningStart(id: string, callbacks: StreamProcessorCallbacks): void {
+  processReasoningStart(
+    id: string,
+    providerMetadata: Record<string, unknown> | undefined,
+    callbacks: StreamProcessorCallbacks
+  ): void {
     // logger.info('Processing reasoning start:', { id });
 
     // Create a new reasoning block
     this.state.currentReasoningId = id;
-    const newBlock: ReasoningBlock = { id, text: '' };
+    const newBlock: ReasoningBlock = { id, text: '', providerMetadata };
     this.state.reasoningBlocks.push(newBlock);
     this.state.contentOrder.push({
       type: 'reasoning',
@@ -313,6 +354,7 @@ export class StreamProcessor {
   processReasoningDelta(
     id: string,
     text: string,
+    providerMetadata: Record<string, unknown> | undefined,
     context: StreamProcessorContext,
     callbacks: StreamProcessorCallbacks
   ): void {
@@ -326,7 +368,30 @@ export class StreamProcessor {
       callbacks.onAssistantMessageStart?.();
     }
 
-    // Skip empty or whitespace-only reasoning
+    // Find or create the reasoning block for this ID
+    let blockIndex = this.state.reasoningBlocks.findIndex((b) => b.id === id);
+
+    if (blockIndex === -1) {
+      // If no reasoning-start was received, create the block now (backward compatibility)
+      const newBlock: ReasoningBlock = { id, text: '', providerMetadata };
+      this.state.reasoningBlocks.push(newBlock);
+      blockIndex = this.state.reasoningBlocks.length - 1;
+
+      // Only add to contentOrder if this is a new block
+      const lastOrder = this.state.contentOrder[this.state.contentOrder.length - 1];
+      if (!lastOrder || lastOrder.type !== 'reasoning' || lastOrder.index !== blockIndex) {
+        this.state.contentOrder.push({ type: 'reasoning', index: blockIndex });
+      }
+    }
+
+    // Update providerMetadata if provided (this is how signature is delivered)
+    // Deep merge to preserve existing metadata while adding new fields (e.g., signature)
+    const block = this.state.reasoningBlocks[blockIndex];
+    if (block && providerMetadata) {
+      block.providerMetadata = this.deepMergeMetadata(block.providerMetadata, providerMetadata);
+    }
+
+    // Skip UI updates for empty or whitespace-only reasoning
     if (!text || !text.trim()) {
       callbacks.onStatus?.(t.StreamProcessor.status.thinking);
       return;
@@ -340,25 +405,7 @@ export class StreamProcessor {
       callbacks.onChunk(formattedText);
       this.state.isFirstReasoning = false;
 
-      // Track in structured content
-      // Find or create the reasoning block for this ID
-      let blockIndex = this.state.reasoningBlocks.findIndex((b) => b.id === id);
-
-      if (blockIndex === -1) {
-        // If no reasoning-start was received, create the block now (backward compatibility)
-        const newBlock: ReasoningBlock = { id, text: '' };
-        this.state.reasoningBlocks.push(newBlock);
-        blockIndex = this.state.reasoningBlocks.length - 1;
-
-        // Only add to contentOrder if this is a new block
-        const lastOrder = this.state.contentOrder[this.state.contentOrder.length - 1];
-        if (!lastOrder || lastOrder.type !== 'reasoning' || lastOrder.index !== blockIndex) {
-          this.state.contentOrder.push({ type: 'reasoning', index: blockIndex });
-        }
-      }
-
       // Append text to the reasoning block
-      const block = this.state.reasoningBlocks[blockIndex];
       if (block) {
         block.text += text;
       }
@@ -385,6 +432,7 @@ export class StreamProcessor {
   /**
    * Get structured assistant content as an array of TextPart and ReasoningPart
    * This builds the proper AssistantContent format for Vercel AI SDK
+   * ReasoningParts include providerOptions with signature for Claude API extended thinking
    */
   getAssistantContent(): Array<TextPart | ReasoningPart> {
     const content: Array<TextPart | ReasoningPart> = [];
@@ -398,7 +446,18 @@ export class StreamProcessor {
       } else if (order.type === 'reasoning') {
         const block = this.state.reasoningBlocks[order.index];
         if (block?.text && this.isSignificantText(block.text)) {
-          content.push({ type: 'reasoning', text: block.text.trim() });
+          // Pass providerMetadata as providerOptions for AI SDK to convert reasoning back to thinking
+          // The providerMetadata contains signature required by Claude API
+          const reasoningPart: ReasoningPart = {
+            type: 'reasoning',
+            text: block.text.trim(),
+          };
+          if (block.providerMetadata) {
+            // Use type assertion as providerMetadata comes from AI SDK events
+            // biome-ignore lint/suspicious/noExplicitAny: AI SDK type compatibility
+            (reasoningPart as any).providerOptions = block.providerMetadata;
+          }
+          content.push(reasoningPart);
         }
       }
     }

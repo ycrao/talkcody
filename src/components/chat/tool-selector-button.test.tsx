@@ -59,6 +59,7 @@ vi.mock('@/hooks/use-settings', () => ({
 
 // Mock tool registry
 vi.mock('@/services/agents/tool-registry', () => ({
+  areToolsLoaded: vi.fn(() => true),
   getAvailableToolsForUI: vi.fn(() => [
     { id: 'bashTool', label: 'Bash', ref: {} },
     { id: 'readFile', label: 'Read File', ref: {} },
@@ -69,6 +70,11 @@ vi.mock('@/services/agents/tool-registry', () => ({
     { id: 'readFile', label: 'Read File', ref: {} },
     { id: 'writeFile', label: 'Write File', ref: {} },
   ]),
+}));
+
+// Mock agent tool access - allow all tools by default
+vi.mock('@/services/agents/agent-tool-access', () => ({
+  isToolAllowedForAgent: vi.fn(() => true),
 }));
 
 // Mock MCP tools hook

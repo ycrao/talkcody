@@ -1,7 +1,10 @@
+// src/providers/core/provider-factory.ts
+// Provider factory service for creating and managing AI provider instances
+
 import { logger } from '@/lib/logger';
-import { MODEL_CONFIGS, type ModelKey, type ProviderType } from '@/lib/models';
 import { PROVIDERS_WITH_CODING_PLAN, providerRegistry } from '@/providers';
-import { modelService } from '@/services/model-service';
+import { MODEL_CONFIGS, type ModelKey, type ProviderType } from '@/providers/config/model-config';
+import { modelService } from '@/providers/models/model-service';
 import { settingsManager } from '@/stores/settings-store';
 import type { ApiKeySettings } from '@/types/api-keys';
 

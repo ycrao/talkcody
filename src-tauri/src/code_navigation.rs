@@ -1481,22 +1481,45 @@ fn extract_class_summary(text: &str, lang_id: &str) -> String {
 
     match lang_id {
         "typescript" | "javascript" | "tsx" | "jsx" => {
-            // First line is class declaration
             result.push(lines[0].to_string());
+
+            // Detect the indentation level of class members (first non-empty line after class declaration)
+            let member_indent = lines
+                .iter()
+                .skip(1)
+                .find(|l| {
+                    !l.trim().is_empty()
+                        && !l.trim().starts_with("//")
+                        && !l.trim().starts_with("*")
+                })
+                .map(|l| l.len() - l.trim_start().len())
+                .unwrap_or(2);
 
             for line in lines.iter().skip(1) {
                 let trimmed = line.trim();
-                // Include field declarations and method signatures
-                if trimmed.starts_with("private ")
+                let current_indent = line.len() - line.trim_start().len();
+
+                // Only consider lines at the class member indentation level
+                if current_indent != member_indent || trimmed.is_empty() {
+                    continue;
+                }
+
+                // Check if it's a class member (field, method, constructor, decorator)
+                let is_member = trimmed.starts_with("private ")
                     || trimmed.starts_with("public ")
                     || trimmed.starts_with("protected ")
                     || trimmed.starts_with("readonly ")
                     || trimmed.starts_with("static ")
                     || trimmed.starts_with("constructor")
                     || trimmed.starts_with("async ")
-                    || (trimmed.contains('(') && trimmed.contains(')'))
-                {
-                    // It's a method or field, include signature
+                    || trimmed.starts_with("@") // decorators
+                    || trimmed.starts_with("get ")
+                    || trimmed.starts_with("set ")
+                    // Method without access modifier (must have parentheses and be followed by { or :)
+                    || (trimmed.contains('(')
+                        && (trimmed.contains(") {") || trimmed.contains("): ")));
+
+                if is_member {
                     if let Some(brace_pos) = line.find('{') {
                         result.push(format!("{}{{ ... }}", &line[..brace_pos]));
                     } else {

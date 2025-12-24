@@ -1,16 +1,21 @@
-// src/services/model-service.ts
+// src/providers/models/model-service.ts
 import { logger } from '@/lib/logger';
-import { getProvidersForModel, MODEL_CONFIGS } from '@/lib/models';
 import { PROVIDER_CONFIGS, providerRegistry } from '@/providers';
+import { getProvidersForModel, MODEL_CONFIGS } from '@/providers/config/model-config';
+import { customModelService } from '@/providers/custom/custom-model-service';
+import { customProviderService } from '@/providers/custom/custom-provider-service';
+import { modelSyncService } from '@/providers/models/model-sync-service';
+import { modelTypeService } from '@/providers/models/model-type-service';
+import { agentRegistry } from '@/services/agents/agent-registry';
 import { settingsManager } from '@/stores/settings-store';
 import type { AgentDefinition } from '@/types/agent';
 import type { ApiKeySettings, AvailableModel } from '@/types/api-keys';
 import { MODEL_TYPE_SETTINGS_KEYS } from '@/types/model-types';
-import { agentRegistry } from './agents/agent-registry';
-import { customModelService } from './custom-model-service';
-import { customProviderService } from './custom-provider-service';
-import { modelSyncService } from './model-sync-service';
-import { modelTypeService } from './model-type-service';
+
+interface OAuthConfig {
+  anthropicAccessToken?: string | null;
+  openaiAccessToken?: string | null;
+}
 
 export class ModelService {
   private syncInitialized = false;
@@ -33,6 +38,7 @@ export class ModelService {
     await this.initialize();
 
     const apiKeys = await this.getApiKeys();
+    const oauthConfig = await this.getOAuthConfig();
     const availableModels: AvailableModel[] = [];
 
     // Iterate through all built-in models
@@ -42,7 +48,7 @@ export class ModelService {
       // Find all available providers for this model (not just the best one)
       const providers = getProvidersForModel(modelKey);
       // logger.info(`Found ${providers.length} providers for model ${modelKey}`);
-      const availableProviders = this.getAllAvailableProviders(providers, apiKeys);
+      const availableProviders = this.getAllAvailableProviders(providers, apiKeys, oauthConfig);
       // logger.info(`Found ${availableProviders.length} available providers for model ${modelKey}`);
 
       // Create a model entry for each available provider
@@ -69,7 +75,7 @@ export class ModelService {
         // Custom models have explicit providers, check if provider is available
         for (const providerId of modelConfig.providers) {
           // Check if it's a built-in provider with API key, or an enabled custom provider
-          const isBuiltInWithKey = this.hasApiKeyForProvider(providerId, apiKeys);
+          const isBuiltInWithKey = this.hasApiKeyForProvider(providerId, apiKeys, oauthConfig);
           const isCustomProviderEnabled = customProviderIds.has(providerId);
 
           if (isBuiltInWithKey || isCustomProviderEnabled) {
@@ -110,8 +116,9 @@ export class ModelService {
    */
   async getBestProviderForModel(modelKey: string): Promise<string | null> {
     const apiKeys = await this.getApiKeys();
+    const oauthConfig = await this.getOAuthConfig();
     const providers = getProvidersForModel(modelKey);
-    const bestProvider = this.getBestAvailableProvider(providers, apiKeys);
+    const bestProvider = this.getBestAvailableProvider(providers, apiKeys, oauthConfig);
     return bestProvider?.id || null;
   }
 
@@ -125,9 +132,10 @@ export class ModelService {
     } catch {
       apiKeys = {};
     }
+    const oauthConfig = this.getOAuthConfigSync();
 
     const providers = getProvidersForModel(modelKey);
-    const bestProvider = this.getBestAvailableProvider(providers, apiKeys);
+    const bestProvider = this.getBestAvailableProvider(providers, apiKeys, oauthConfig);
     return bestProvider?.id || null;
   }
 
@@ -161,7 +169,8 @@ export class ModelService {
     if (providerId) {
       // Check specific provider - could be built-in or custom provider
       const apiKeys = await this.getApiKeys();
-      const hasBuiltInKey = this.hasApiKeyForProvider(providerId, apiKeys);
+      const oauthConfig = await this.getOAuthConfig();
+      const hasBuiltInKey = this.hasApiKeyForProvider(providerId, apiKeys, oauthConfig);
       logger.debug(`isModelAvailable: hasBuiltInKey=${hasBuiltInKey}`);
       if (hasBuiltInKey) {
         return true;
@@ -199,7 +208,8 @@ export class ModelService {
       } catch {
         apiKeys = {};
       }
-      const hasBuiltInKey = this.hasApiKeyForProvider(providerId, apiKeys);
+      const oauthConfig = this.getOAuthConfigSync();
+      const hasBuiltInKey = this.hasApiKeyForProvider(providerId, apiKeys, oauthConfig);
       if (hasBuiltInKey) {
         return true;
       }
@@ -222,6 +232,7 @@ export class ModelService {
   /**
    * Get model configuration including the best provider
    */
+  // biome-ignore lint/suspicious/noExplicitAny: ModelConfig type varies
   async getModelWithProvider(modelKey: string): Promise<{ model: any; provider: string } | null> {
     const modelConfig = MODEL_CONFIGS[modelKey as keyof typeof MODEL_CONFIGS];
     if (!modelConfig) return null;
@@ -235,9 +246,14 @@ export class ModelService {
   /**
    * Find all available providers from a list based on API key availability
    */
-  private getAllAvailableProviders(providers: any[], apiKeys: ApiKeySettings): any[] {
+  // biome-ignore lint/suspicious/noExplicitAny: Provider objects have varying shapes
+  private getAllAvailableProviders(
+    providers: any[],
+    apiKeys: ApiKeySettings,
+    oauthConfig?: OAuthConfig
+  ): any[] {
     const availableProviders = providers.filter((provider) => {
-      const hasKey = this.hasApiKeyForProvider(provider.id, apiKeys);
+      const hasKey = this.hasApiKeyForProvider(provider.id, apiKeys, oauthConfig);
       // logger.info(`[getAllAvailableProviders] Provider ${provider.id} hasKey: ${hasKey}`);
       return hasKey;
     });
@@ -247,9 +263,14 @@ export class ModelService {
   /**
    * Find the best available provider from a list based on API key availability
    */
-  private getBestAvailableProvider(providers: any[], apiKeys: ApiKeySettings): any | null {
+  // biome-ignore lint/suspicious/noExplicitAny: Provider objects have varying shapes
+  private getBestAvailableProvider(
+    providers: any[],
+    apiKeys: ApiKeySettings,
+    oauthConfig?: OAuthConfig
+  ): any | null {
     for (const provider of providers) {
-      if (this.hasApiKeyForProvider(provider.id, apiKeys)) {
+      if (this.hasApiKeyForProvider(provider.id, apiKeys, oauthConfig)) {
         return provider;
       }
     }
@@ -260,8 +281,12 @@ export class ModelService {
   /**
    * Check if API key is configured for a provider
    */
-  private hasApiKeyForProvider(providerId: string, apiKeys: ApiKeySettings): boolean {
-    return providerRegistry.hasApiKey(providerId, apiKeys);
+  private hasApiKeyForProvider(
+    providerId: string,
+    apiKeys: ApiKeySettings,
+    oauthConfig?: OAuthConfig
+  ): boolean {
+    return providerRegistry.hasApiKey(providerId, apiKeys, oauthConfig);
   }
 
   /**
@@ -269,6 +294,48 @@ export class ModelService {
    */
   private async getApiKeys(): Promise<ApiKeySettings> {
     return await settingsManager.getApiKeys();
+  }
+
+  /**
+   * Get OAuth config for providers that support it
+   */
+  private async getOAuthConfig(): Promise<OAuthConfig> {
+    try {
+      const { getClaudeOAuthAccessToken } = await import('@/providers/oauth/claude-oauth-store');
+      const anthropicAccessToken = await getClaudeOAuthAccessToken();
+
+      const { getOpenAIOAuthAccessToken } = await import('@/providers/oauth/openai-oauth-store');
+      const openaiAccessToken = await getOpenAIOAuthAccessToken();
+
+      return { anthropicAccessToken, openaiAccessToken };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Get OAuth config synchronously (from cache)
+   */
+  private getOAuthConfigSync(): OAuthConfig {
+    try {
+      const { useClaudeOAuthStore } = require('@/providers/oauth/claude-oauth-store');
+      const anthropicState = useClaudeOAuthStore.getState();
+      const anthropicAccessToken = anthropicState.accessToken;
+
+      // Try to get OpenAI OAuth state synchronously
+      let openaiAccessToken = null;
+      try {
+        const { useOpenAIOAuthStore } = require('@/providers/oauth/openai-oauth-store');
+        const openaiState = useOpenAIOAuthStore.getState();
+        openaiAccessToken = openaiState.accessToken;
+      } catch {
+        // OpenAI OAuth store not loaded yet
+      }
+
+      return { anthropicAccessToken, openaiAccessToken };
+    } catch {
+      return {};
+    }
   }
 
   /**

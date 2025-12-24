@@ -45,6 +45,7 @@ describe('Reasoning Display Integration', () => {
     processor.processReasoningDelta(
       'test-id',
       reasoningText,
+      undefined,
       { suppressReasoning: false },
       {
         onChunk: (chunk: string) => {
@@ -87,6 +88,7 @@ describe('Reasoning Display Integration', () => {
     processor.processReasoningDelta(
       'test-id',
       reasoningText1,
+      undefined,
       { suppressReasoning: false },
       {
         onChunk: (chunk: string) => {
@@ -166,6 +168,7 @@ describe('Reasoning Display Integration', () => {
     processor.processReasoningDelta(
       'test-id',
       reasoningText,
+      undefined,
       { suppressReasoning: false },
       {
         onChunk: (chunk: string) => {
@@ -257,6 +260,7 @@ describe('Reasoning Display Integration', () => {
     processor.processReasoningDelta(
       'test-id',
       reasoningText2,
+      undefined,
       { suppressReasoning: false },
       {
         onChunk: (chunk: string) => {

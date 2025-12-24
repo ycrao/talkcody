@@ -630,11 +630,8 @@ echo "done"`);
         expect(mockInvoke).not.toHaveBeenCalled();
       });
 
-      it('should block rm with wildcards', async () => {
-        const result = await bashExecutor.execute('rm *.txt');
-        expect(result.success).toBe(false);
-        expect(mockInvoke).not.toHaveBeenCalled();
-      });
+      // Note: rm with wildcards is now allowed within workspace (validated by validateWildcardRmCommand)
+      // See 'rm with wildcards validation' tests below for comprehensive wildcard tests
     });
 
     describe('find with delete', () => {
@@ -1094,11 +1091,8 @@ echo "done"`);
         expect(result.message).toContain('outside the workspace');
       });
 
-      it('should block rm with wildcards even within workspace', async () => {
-        const result = await bashExecutor.execute('rm *.txt');
-        expect(result.success).toBe(false);
-        expect(result.message).toContain('Command blocked');
-      });
+      // Note: rm with wildcards is now allowed within workspace (validated by validateWildcardRmCommand)
+      // See 'rm with wildcards validation' tests below for comprehensive wildcard tests
     });
 
     describe('non-rm commands should not be affected', () => {
@@ -1383,6 +1377,655 @@ rm /outside/path`);
       expect(result.timed_out).toBe(true);
       expect(result.pid).toBe(67890);
       expect(result.outputFile).toBe('/test/root/.talkcody/output/task-123/tool-456_stdout.log');
+    });
+  });
+
+  describe('rm with wildcards validation', () => {
+    beforeEach(() => {
+      mockInvoke.mockClear();
+      mockGetValidatedWorkspaceRoot.mockResolvedValue('/test/root');
+      mockGetEffectiveWorkspaceRoot.mockResolvedValue('/test/root');
+
+      // Setup mock for git check and glob expansion
+      mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+        if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+          return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+        }
+        if (cmd === 'search_files_by_glob') {
+          // Default: return files within workspace with canonical_path
+          const pattern = args.pattern as string;
+          if (pattern.includes('/test/root/')) {
+            return Promise.resolve([
+              { path: '/test/root/file1.txt', canonical_path: '/test/root/file1.txt', is_directory: false, modified_time: 123 },
+              { path: '/test/root/file2.txt', canonical_path: '/test/root/file2.txt', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve([]);
+        }
+        return Promise.resolve(createMockShellResult({ code: 0 }));
+      });
+
+      // Default: paths within /test/root are allowed
+      mockIsPathWithinProjectDirectory.mockImplementation((targetPath: string, rootPath: string) => {
+        if (targetPath.includes('..')) return Promise.resolve(false);
+        if (targetPath.startsWith('/outside')) return Promise.resolve(false);
+        if (targetPath.startsWith('/tmp')) return Promise.resolve(false);
+        if (targetPath.startsWith('/etc')) return Promise.resolve(false);
+        if (!targetPath.startsWith(rootPath) && targetPath.startsWith('/')) return Promise.resolve(false);
+        return Promise.resolve(true);
+      });
+    });
+
+    describe('allowed wildcard patterns within workspace', () => {
+      it('should allow rm *.txt within workspace', async () => {
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm src/*.ts within workspace', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/src/file1.ts', canonical_path: '/test/root/src/file1.ts', is_directory: false, modified_time: 123 },
+              { path: '/test/root/src/file2.ts', canonical_path: '/test/root/src/file2.ts', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm src/*.ts', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm **/*.js recursive pattern', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/src/a.js', canonical_path: '/test/root/src/a.js', is_directory: false, modified_time: 123 },
+              { path: '/test/root/lib/b.js', canonical_path: '/test/root/lib/b.js', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm **/*.js', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm dist/**/*.test.* nested pattern', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/dist/a.test.js', canonical_path: '/test/root/dist/a.test.js', is_directory: false, modified_time: 123 },
+              { path: '/test/root/dist/sub/b.test.ts', canonical_path: '/test/root/dist/sub/b.test.ts', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm dist/**/*.test.*', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm -f with wildcards', async () => {
+        const result = await bashExecutor.execute('rm -f *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm -rf with wildcards for directories', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/temp1', canonical_path: '/test/root/temp1', is_directory: true, modified_time: 123 },
+              { path: '/test/root/temp2', canonical_path: '/test/root/temp2', is_directory: true, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm -rf temp*', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm with character class wildcards', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/file1.txt', canonical_path: '/test/root/file1.txt', is_directory: false, modified_time: 123 },
+              { path: '/test/root/file2.txt', canonical_path: '/test/root/file2.txt', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm file[0-9].txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm with question mark wildcard', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/fileA.txt', canonical_path: '/test/root/fileA.txt', is_directory: false, modified_time: 123 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm file?.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm with brace expansion', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/file.ts', canonical_path: '/test/root/file.ts', is_directory: false, modified_time: 123 },
+              { path: '/test/root/file.js', canonical_path: '/test/root/file.js', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm file.{ts,js}', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm with quoted wildcards', async () => {
+        const result = await bashExecutor.execute('rm "*.txt"', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm with multiple wildcard patterns', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/file.txt', canonical_path: '/test/root/file.txt', is_directory: false, modified_time: 123 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm *.txt *.log *.tmp', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm with mixed explicit and wildcard paths', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/file.txt', canonical_path: '/test/root/file.txt', is_directory: false, modified_time: 123 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm explicit.txt *.log', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow rm with wildcard when pattern matches nothing', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([]); // No matches
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        // When pattern matches nothing, we let shell handle it
+        const result = await bashExecutor.execute('rm *.nonexistent', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('blocked wildcard patterns (path traversal)', () => {
+      it('should block rm ../*.txt pattern', async () => {
+        const result = await bashExecutor.execute('rm ../*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm ../../*.txt pattern', async () => {
+        const result = await bashExecutor.execute('rm ../../*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm ../src/*.ts pattern', async () => {
+        const result = await bashExecutor.execute('rm ../src/*.ts', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm /tmp/*.txt absolute path outside workspace', async () => {
+        const result = await bashExecutor.execute('rm /tmp/*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm /etc/*.conf absolute path outside workspace', async () => {
+        const result = await bashExecutor.execute('rm /etc/*.conf', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm /outside/path/*.txt', async () => {
+        const result = await bashExecutor.execute('rm /outside/path/*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm with wildcard when expanded canonical_path is outside workspace', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            // Simulating symlink attack: path looks safe but canonical_path reveals it points outside
+            return Promise.resolve([
+              { path: '/test/root/file.txt', canonical_path: '/test/root/file.txt', is_directory: false, modified_time: 123 },
+              { path: '/test/root/link/dangerous.txt', canonical_path: '/outside/dangerous.txt', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm with wildcard when ALL expanded paths must be validated', async () => {
+        // 99 files inside, 1 file outside should still block
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            const paths = [];
+            for (let i = 0; i < 99; i++) {
+              paths.push({ path: `/test/root/file${i}.txt`, canonical_path: `/test/root/file${i}.txt`, is_directory: false, modified_time: i });
+            }
+            // Add one that points outside workspace via symlink
+            paths.push({ path: '/test/root/link/danger.txt', canonical_path: '/outside/danger.txt', is_directory: false, modified_time: 100 });
+            return Promise.resolve(paths);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+    });
+
+    describe('wildcard with workspace/git requirements', () => {
+      it('should block rm with wildcard when no workspace root', async () => {
+        mockGetValidatedWorkspaceRoot.mockResolvedValue(null);
+        mockGetEffectiveWorkspaceRoot.mockResolvedValue(null);
+
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('no workspace root');
+      });
+
+      it('should block rm with wildcard when not in git repo', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 128, stderr: 'not a git repo' }));
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('git repositories');
+      });
+    });
+
+    describe('wildcard in chained commands', () => {
+      it('should allow ls && rm *.txt', async () => {
+        const result = await bashExecutor.execute('ls && rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow echo "done" || rm *.txt', async () => {
+        const result = await bashExecutor.execute('echo "done" || rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should allow ls; rm *.txt', async () => {
+        const result = await bashExecutor.execute('ls; rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should block ls && rm ../*.txt', async () => {
+        const result = await bashExecutor.execute('ls && rm ../*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block safe command followed by dangerous wildcard rm', async () => {
+        const result = await bashExecutor.execute('mkdir temp && rm /tmp/*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+    });
+
+    describe('wildcard with heredoc', () => {
+      it('should not check wildcard in heredoc content', async () => {
+        const result = await bashExecutor.execute(`cat << 'EOF' > script.sh
+rm ../*.txt
+rm /tmp/*.log
+EOF`);
+        expect(result.success).toBe(true);
+      });
+
+      it('should check wildcard rm after heredoc', async () => {
+        const result = await bashExecutor.execute(`cat << 'EOF'
+safe content
+EOF
+rm ../*.txt`);
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+    });
+
+    describe('glob expansion error handling', () => {
+      it('should handle glob expansion failure gracefully', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            throw new Error('Glob expansion failed');
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        // When glob fails, we treat it as no matches and let shell handle it
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should handle empty wildcard result', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm *.nonexistent', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should handle pattern that only contains wildcard', async () => {
+        const result = await bashExecutor.execute('rm *', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should handle pattern starting with wildcard', async () => {
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should validate explicit path mixed with wildcard', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/file.txt', canonical_path: '/test/root/file.txt', is_directory: false, modified_time: 123 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        // Explicit path outside workspace should fail even with safe wildcard
+        const result = await bashExecutor.execute('rm /outside/file.txt *.log', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should handle nested directory wildcard patterns', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/a/b/c/file.txt', canonical_path: '/test/root/a/b/c/file.txt', is_directory: false, modified_time: 123 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm a/b/**/*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+    });
+
+    describe('symlink attack prevention', () => {
+      it('should block rm when symlink points to directory outside workspace', async () => {
+        // Simulates: ln -s /etc /workspace/link && rm link/*.conf
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            // path looks safe (inside /test/root/link/) but canonical_path reveals symlink target
+            return Promise.resolve([
+              { path: '/test/root/link/passwd', canonical_path: '/etc/passwd', is_directory: false, modified_time: 123 },
+              { path: '/test/root/link/shadow', canonical_path: '/etc/shadow', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm link/*', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm when symlink file points outside workspace', async () => {
+        // Simulates: ln -s /etc/passwd /workspace/safe_looking.txt && rm *.txt
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/normal.txt', canonical_path: '/test/root/normal.txt', is_directory: false, modified_time: 123 },
+              { path: '/test/root/safe_looking.txt', canonical_path: '/etc/passwd', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should allow rm when all symlinks point within workspace', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            // Symlinks that point within workspace are safe
+            return Promise.resolve([
+              { path: '/test/root/link/file.txt', canonical_path: '/test/root/actual/file.txt', is_directory: false, modified_time: 123 },
+              { path: '/test/root/link/other.txt', canonical_path: '/test/root/deep/nested/other.txt', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm link/*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should block rm when symlink chain leads outside workspace', async () => {
+        // link1 -> link2 -> /etc/passwd
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/link1', canonical_path: '/outside/sensitive', is_directory: false, modified_time: 123 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm link*', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+    });
+
+    describe('root directory wildcard', () => {
+      it('should block rm /* (root directory wildcard)', async () => {
+        const result = await bashExecutor.execute('rm /*', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm -rf /*', async () => {
+        const result = await bashExecutor.execute('rm -rf /*', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+
+      it('should block rm /tmp/* (absolute path outside workspace)', async () => {
+        const result = await bashExecutor.execute('rm /tmp/*', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+    });
+
+    describe('large file count handling', () => {
+      it('should handle large number of matched files', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            // Simulate 5000 files
+            const paths = [];
+            for (let i = 0; i < 5000; i++) {
+              paths.push({
+                path: `/test/root/dir${Math.floor(i / 100)}/file${i}.txt`,
+                canonical_path: `/test/root/dir${Math.floor(i / 100)}/file${i}.txt`,
+                is_directory: false,
+                modified_time: i,
+              });
+            }
+            return Promise.resolve(paths);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm **/*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should still block if any of 1000 files is outside workspace', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            const paths = [];
+            for (let i = 0; i < 999; i++) {
+              paths.push({
+                path: `/test/root/file${i}.txt`,
+                canonical_path: `/test/root/file${i}.txt`,
+                is_directory: false,
+                modified_time: i,
+              });
+            }
+            // Last file is dangerous (symlink to outside)
+            paths.push({
+              path: '/test/root/link.txt',
+              canonical_path: '/etc/passwd',
+              is_directory: false,
+              modified_time: 999,
+            });
+            return Promise.resolve(paths);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm *.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
+    });
+
+    describe('absolute path within workspace', () => {
+      it('should allow rm with absolute path pattern within workspace', async () => {
+        mockInvoke.mockImplementation((cmd: string, args: Record<string, unknown>) => {
+          if (cmd === 'execute_user_shell' && args.command === 'git rev-parse --is-inside-work-tree') {
+            return Promise.resolve(createMockShellResult({ code: 0, stdout: 'true\n' }));
+          }
+          if (cmd === 'search_files_by_glob') {
+            return Promise.resolve([
+              { path: '/test/root/file1.txt', canonical_path: '/test/root/file1.txt', is_directory: false, modified_time: 123 },
+              { path: '/test/root/file2.txt', canonical_path: '/test/root/file2.txt', is_directory: false, modified_time: 124 },
+            ]);
+          }
+          return Promise.resolve(createMockShellResult({ code: 0 }));
+        });
+
+        const result = await bashExecutor.execute('rm /test/root/*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(true);
+      });
+
+      it('should block rm with absolute path pattern outside workspace', async () => {
+        const result = await bashExecutor.execute('rm /other/path/*.txt', 'task-123', 'tool-456');
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('outside workspace');
+      });
     });
   });
 });

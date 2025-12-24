@@ -12,7 +12,7 @@ import {
 import type { AgentToolSet } from '@/types/agent';
 
 // Re-export for backward compatibility
-export { isValidToolName } from '@/lib/tools';
+export { areToolsLoaded, isValidToolName } from '@/lib/tools';
 
 /**
  * Registry of all available tools that can be used by agents.
@@ -63,11 +63,12 @@ async function getToolRegistry(): Promise<
 
     for (const [toolName, toolRef] of Object.entries(tools)) {
       const metadata = getToolMetadata(toolName);
+      const toolRefTyped = toolRef as { isBeta?: boolean; badgeLabel?: string } | undefined;
       registry[toolName] = {
         ref: toolRef,
         label: getToolLabel(toolName),
-        isBeta: (toolRef as any)?.isBeta === true || metadata.isBeta === true,
-        badgeLabel: metadata.badgeLabel ?? (toolRef as any)?.badgeLabel,
+        isBeta: toolRefTyped?.isBeta === true || metadata.isBeta === true,
+        badgeLabel: metadata.badgeLabel ?? toolRefTyped?.badgeLabel,
       };
     }
 
@@ -214,8 +215,9 @@ export async function getAvailableToolsForUI(): Promise<
 > {
   const registry = await getToolRegistry();
   return Object.entries(registry).map(([id, { ref, label }]) => {
-    const isBeta = (ref as any)?.isBeta === true || registry[id]?.isBeta === true;
-    const badgeLabel = registry[id]?.badgeLabel ?? ((ref as any)?.badgeLabel as string | undefined);
+    const refTyped = ref as { isBeta?: boolean; badgeLabel?: string } | undefined;
+    const isBeta = refTyped?.isBeta === true || registry[id]?.isBeta === true;
+    const badgeLabel = registry[id]?.badgeLabel ?? refTyped?.badgeLabel;
     return {
       id,
       label,

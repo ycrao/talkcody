@@ -19,9 +19,7 @@ function createAuthenticatedFetch(): (
     const token = await secureStorage.getAuthToken();
 
     if (!token) {
-      throw new Error(
-        'Authentication required. Please sign in with GitHub or Google to use TalkCody Free.'
-      );
+      throw new Error('Authentication required. Please sign in with GitHub to use TalkCody Free.');
     }
 
     const headers = new Headers(init?.headers);

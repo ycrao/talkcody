@@ -94,49 +94,26 @@ const concurrentCallAgentTool = {
   callAgent: { canConcurrent: true },
 } as const;
 
-describe('DependencyAnalyzer - Context Isolation Validation', () => {
-  it('throws error when callAgent is mixed with other tools', async () => {
+describe('DependencyAnalyzer - Mixed Agent and Tool Calls', () => {
+  it('allows mixed agent and tool calls using ToolDependencyAnalyzer', async () => {
     const toolCalls: ToolCallInfo[] = [
       { toolCallId: 'read-1', toolName: 'readFile', input: { path: 'src/a.ts' } },
       { toolCallId: 'agent-1', toolName: 'callAgent', input: { targets: ['src/b.ts'] } },
     ];
 
-    await expect(async () => {
-      await dependencyAnalyzer.analyzeDependencies(toolCalls, concurrentCallAgentTool as any);
-    }).rejects.toThrow(/Context isolation violation/);
+    const plan = await dependencyAnalyzer.analyzeDependencies(toolCalls, concurrentCallAgentTool as any);
+    // Mixed calls use ToolDependencyAnalyzer, not AgentDependencyAnalyzer
+    expect(isAgentExecutionPlan(plan)).toBe(false);
   });
 
-  it('throws error when a callAgent variant is mixed with other tools', async () => {
-    const toolCalls: ToolCallInfo[] = [
-      { toolCallId: 'read-1', toolName: 'readFile', input: { path: 'src/a.ts' } },
-      { toolCallId: 'agent-1', toolName: 'callAgent Tool', input: { targets: ['src/b.ts'] } },
-    ];
-
-    await expect(async () => {
-      await dependencyAnalyzer.analyzeDependencies(toolCalls, concurrentCallAgentTool as any);
-    }).rejects.toThrow(/Context isolation violation/);
-  });
-
-  it('throws error when callAgent is mixed with other tools', async () => {
+  it('allows mixed agent variant and tool calls', async () => {
     const toolCalls: ToolCallInfo[] = [
       { toolCallId: 'search-1', toolName: 'grepSearch', input: { query: 'test' } },
       { toolCallId: 'agent-1', toolName: 'callAgent', input: {} },
     ];
 
-    await expect(async () => {
-      await dependencyAnalyzer.analyzeDependencies(toolCalls, concurrentCallAgentTool as any);
-    }).rejects.toThrow(/Context isolation violation/);
-  });
-
-  it('throws error when a callAgent variant is mixed with other tools', async () => {
-    const toolCalls: ToolCallInfo[] = [
-      { toolCallId: 'search-1', toolName: 'grepSearch', input: { query: 'test' } },
-      { toolCallId: 'agent-1', toolName: 'callagent', input: {} },
-    ];
-
-    await expect(async () => {
-      await dependencyAnalyzer.analyzeDependencies(toolCalls, concurrentCallAgentTool as any);
-    }).rejects.toThrow(/Context isolation violation/);
+    const plan = await dependencyAnalyzer.analyzeDependencies(toolCalls, concurrentCallAgentTool as any);
+    expect(isAgentExecutionPlan(plan)).toBe(false);
   });
 
   it('allows only callAgent calls without other tools', async () => {

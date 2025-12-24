@@ -1,10 +1,10 @@
 import { CheckCircle2, Wrench } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BetaBadge } from '@/components/beta-badge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { isToolAllowedForAgent } from '@/services/agents/agent-tool-access';
-import { getAvailableToolsForUISync } from '@/services/agents/tool-registry';
+import { areToolsLoaded, getAvailableToolsForUISync } from '@/services/agents/tool-registry';
 
 interface BuiltInToolsSelectorProps {
   agentId?: string;
@@ -17,7 +17,38 @@ export function BuiltInToolsSelector({
   selectedTools,
   onToolsChange,
 }: BuiltInToolsSelectorProps) {
-  const builtInTools = useMemo(() => getAvailableToolsForUISync(), []);
+  // Get tools synchronously if already loaded, or wait for useEffect to set state
+  const [toolsLoaded, setToolsLoaded] = useState(() => areToolsLoaded());
+
+  // Wait for tools to be loaded before accessing them
+  useEffect(() => {
+    // Check immediately in case tools loaded after initial render
+    if (areToolsLoaded() && !toolsLoaded) {
+      setToolsLoaded(true);
+      return;
+    }
+
+    if (!areToolsLoaded()) {
+      const checkToolsLoaded = () => {
+        if (areToolsLoaded()) {
+          setToolsLoaded(true);
+        } else {
+          setTimeout(checkToolsLoaded, 100);
+        }
+      };
+      const timer = setTimeout(checkToolsLoaded, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [toolsLoaded]);
+
+  const builtInTools = useMemo(() => {
+    if (!toolsLoaded || !areToolsLoaded()) return [];
+    try {
+      return getAvailableToolsForUISync();
+    } catch {
+      return [];
+    }
+  }, [toolsLoaded]);
 
   const handleToolToggle = (toolId: string, checked: boolean) => {
     const newSelectedTools = new Set(selectedTools);
@@ -34,8 +65,8 @@ export function BuiltInToolsSelector({
     () =>
       builtInTools.filter((tool) => {
         if (!isToolAllowedForAgent(agentId, tool.id)) return false;
-        const ref = tool.ref as any;
-        return !ref.hidden;
+        const ref = tool.ref as { hidden?: boolean } | undefined;
+        return !ref?.hidden;
       }),
     [builtInTools, agentId]
   );
@@ -43,7 +74,9 @@ export function BuiltInToolsSelector({
   const selectedCount = useMemo(
     () =>
       selectedTools.filter((tool) =>
-        visibleTools.some((t) => t.id === tool && !((t.ref as any).hidden || false))
+        visibleTools.some(
+          (t) => t.id === tool && !((t.ref as { hidden?: boolean } | undefined)?.hidden || false)
+        )
       ).length,
     [selectedTools, visibleTools]
   );

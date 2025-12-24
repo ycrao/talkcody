@@ -39,10 +39,14 @@ impl FileWatcher {
         })
     }
 
+    /// Watch a directory for file changes
+    /// If window_label is provided, events will be emitted only to that specific window
+    /// Otherwise, events will be broadcast to all windows
     pub fn watch_directory<P: AsRef<Path>>(
         &mut self,
         path: P,
         app_handle: AppHandle,
+        window_label: Option<String>,
     ) -> notify::Result<()> {
         // Stop any existing watcher first
         self.stop();
@@ -71,8 +75,9 @@ impl FileWatcher {
         self._stop_flag = Arc::new(AtomicBool::new(false));
         let stop_flag = Arc::clone(&self._stop_flag);
 
-        // Clone app_handle for the file watcher thread
+        // Clone app_handle and window_label for the file watcher thread
         let file_app_handle = app_handle.clone();
+        let file_window_label = window_label.clone();
 
         // Spawn thread to handle events with proper trailing-edge debounce
         let thread_handle = thread::spawn(move || {
@@ -134,8 +139,17 @@ impl FileWatcher {
                 if pending_emit {
                     let elapsed = Instant::now().duration_since(last_event_time);
                     if elapsed >= debounce_duration {
-                        log::debug!("Emitting debounced file-system-changed event for {} paths", pending_paths.len());
-                        if let Err(e) = file_app_handle.emit("file-system-changed", &pending_paths) {
+                        log::debug!("Emitting debounced file-system-changed event for {} paths to {:?}",
+                            pending_paths.len(), file_window_label);
+
+                        // Emit to specific window if label provided, otherwise broadcast
+                        let result = if let Some(ref label) = file_window_label {
+                            file_app_handle.emit_to(label, "file-system-changed", &pending_paths)
+                        } else {
+                            file_app_handle.emit("file-system-changed", &pending_paths)
+                        };
+
+                        if let Err(e) = result {
                             log::error!("Failed to emit file system change event: {}", e);
                         }
                         pending_emit = false;
@@ -148,13 +162,19 @@ impl FileWatcher {
         self._thread_handle = Some(thread_handle);
 
         // Also start watching the .git directory for git status changes
-        self.watch_git_directory(&repo_path, app_handle)?;
+        self.watch_git_directory(&repo_path, app_handle, window_label)?;
 
         Ok(())
     }
 
     /// Watch the .git directory for git status changes
-    fn watch_git_directory<P: AsRef<Path>>(&mut self, repo_path: P, app_handle: AppHandle) -> notify::Result<()> {
+    /// If window_label is provided, events will be emitted only to that specific window
+    fn watch_git_directory<P: AsRef<Path>>(
+        &mut self,
+        repo_path: P,
+        app_handle: AppHandle,
+        window_label: Option<String>,
+    ) -> notify::Result<()> {
         let git_path = repo_path.as_ref().join(".git");
 
         if !git_path.exists() {
@@ -162,7 +182,7 @@ impl FileWatcher {
             return Ok(());
         }
 
-        log::info!("Starting git directory watcher for: {:?}", git_path);
+        log::info!("Starting git directory watcher for: {:?} (window: {:?})", git_path, window_label);
 
         // Stop any existing git watcher
         self.stop_git_watcher();
@@ -236,8 +256,16 @@ impl FileWatcher {
                 if pending_emit {
                     let elapsed = Instant::now().duration_since(last_event_time);
                     if elapsed >= debounce_duration {
-                        log::info!("Emitting debounced git-status-changed event");
-                        if let Err(e) = app_handle.emit("git-status-changed", ()) {
+                        log::info!("Emitting debounced git-status-changed event to {:?}", window_label);
+
+                        // Emit to specific window if label provided, otherwise broadcast
+                        let result = if let Some(ref label) = window_label {
+                            app_handle.emit_to(label, "git-status-changed", ())
+                        } else {
+                            app_handle.emit("git-status-changed", ())
+                        };
+
+                        if let Err(e) = result {
                             log::error!("Failed to emit git-status-changed event: {}", e);
                         }
                         pending_emit = false;

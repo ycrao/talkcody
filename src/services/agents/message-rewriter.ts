@@ -79,64 +79,77 @@ export class MessageRewriter {
    */
   private async processReadFileResult(part: ToolResultPart): Promise<ToolResultPart> {
     try {
-      // output can be { type: 'json', value: {...} } or { type: 'text', value: '...' }
-      const output = part.output as
-        | { type: 'json'; value: Record<string, unknown> }
-        | { type: 'text'; value: string };
+      // llm-service always uses type: 'text' with JSON.stringify'd value
+      const output = part.output as { type: 'text'; value: string };
 
-      // Handle JSON output format (common case for tool results)
-      if (output?.type === 'json' && typeof output.value === 'object') {
-        const result = output.value as {
-          success?: boolean;
-          file_path?: string;
-          content?: string;
-          message?: string;
-        };
+      if (output?.type !== 'text' || typeof output.value !== 'string') {
+        return part;
+      }
 
-        if (!result?.success || !result.content || !result.file_path) {
-          return part;
-        }
+      // Parse the JSON string
+      let result: {
+        success?: boolean;
+        file_path?: string;
+        content?: string;
+        message?: string;
+      };
+      try {
+        result = JSON.parse(output.value);
+      } catch {
+        return part; // Not valid JSON
+      }
 
-        const lineCount = result.content.split('\n').length;
-        if (lineCount <= this.LINE_THRESHOLD) {
-          return part;
-        }
+      if (!result?.success || !result.content || !result.file_path) {
+        return part;
+      }
 
-        // Get language ID from file path
-        const langId = getLangIdFromPath(result.file_path);
-        if (!langId) {
-          // Unsupported language, keep original
-          return part;
-        }
+      const lineCount = result.content.split('\n').length;
+      if (lineCount <= this.LINE_THRESHOLD) {
+        return part;
+      }
 
-        // Summarize using tree-sitter
-        const summary = await this.summarizeContent(result.content, langId, result.file_path);
+      // Get language ID from file path
+      const langId = getLangIdFromPath(result.file_path);
+      if (!langId) {
+        // Unsupported language, keep original
+        return part;
+      }
 
-        if (!summary.success) {
-          // Summarization failed (unsupported language), keep original
-          return part;
-        }
+      // Summarize using tree-sitter
+      const summary = await this.summarizeContent(result.content, langId, result.file_path);
 
-        logger.info(`MessageRewriter: Compressed readFile result for ${result.file_path}`, {
-          originalLines: summary.original_lines,
-          summaryLength: summary.summary.length,
-        });
+      if (!summary.success) {
+        // Summarization failed (unsupported language), keep original
+        return part;
+      }
 
-        // Return modified result with summarized content
-        return {
-          ...part,
-          output: {
-            type: 'json',
-            value: {
+      const originalChars = result.content.length;
+      const summaryChars = summary.summary.length;
+      const summaryLines = summary.summary.split('\n').length;
+      const charReduction = Math.round((1 - summaryChars / originalChars) * 100);
+
+      logger.info(`MessageRewriter: Compressed readFile result for ${result.file_path}`, {
+        original: { lines: summary.original_lines, chars: originalChars },
+        summary: { lines: summaryLines, chars: summaryChars },
+        reduction: `${charReduction}%`,
+      });
+
+      // Return modified result with summarized content (keep type: 'text' to match input format)
+      return {
+        ...part,
+        output: {
+          type: 'text',
+          value: JSON.stringify(
+            {
               ...result,
               content: summary.summary,
               message: `${result.message} [COMPRESSED: ${summary.original_lines} lines → summarized]`,
             },
-          },
-        };
-      }
-
-      return part;
+            null,
+            2
+          ),
+        },
+      };
     } catch (error) {
       logger.error('MessageRewriter: Failed to process readFile result:', error);
       return part;
@@ -209,9 +222,15 @@ export class MessageRewriter {
         return part;
       }
 
+      const originalChars = content.length;
+      const summaryChars = summary.summary.length;
+      const summaryLines = summary.summary.split('\n').length;
+      const charReduction = Math.round((1 - summaryChars / originalChars) * 100);
+
       logger.info(`MessageRewriter: Compressed writeFile call for ${filePath}`, {
-        originalLines: summary.original_lines,
-        summaryLength: summary.summary.length,
+        original: { lines: summary.original_lines, chars: originalChars },
+        summary: { lines: summaryLines, chars: summaryChars },
+        reduction: `${charReduction}%`,
       });
 
       // Return modified tool call with summarized content

@@ -1,5 +1,5 @@
 {
-  "version": "2025-12-18T04:56:44.086Z",
+  "version": "2025-12-23T06:55:50.687Z",
   "models": {
     "gpt-5-nano": {
       "name": "GPT-5 Nano",
@@ -51,7 +51,7 @@
         "openRouter"
       ],
       "providerMappings": {
-        "openai": "G",
+        "openai": "gpt-5.2",
         "aiGateway": "openai/gpt-5.2",
         "openRouter": "openai/gpt-5.2"
       },
@@ -252,7 +252,7 @@
         "openRouter"
       ],
       "providerMappings": {
-        "anthropic": "claude-opus-4.5",
+        "anthropic": "claude-opus-4-5",
         "aiGateway": "anthropic/claude-opus-4.5",
         "openRouter": "anthropic/claude-opus-4.5"
       },
@@ -273,7 +273,7 @@
         "openRouter"
       ],
       "providerMappings": {
-        "anthropic": "claude-sonnet-4.5",
+        "anthropic": "claude-sonnet-4-5",
         "aiGateway": "anthropic/claude-sonnet-4.5",
         "openRouter": "anthropic/claude-sonnet-4.5"
       },
@@ -394,7 +394,7 @@
       ],
       "providerMappings": {
         "aiGateway": "xai/grok-4.1-fast-reasoning",
-        "openRouter": "x-ai/grok-4.1-fast:free"
+        "openRouter": "x-ai/grok-4.1-fast"
       },
       "pricing": {
         "input": "0.0000002",
@@ -403,25 +403,22 @@
       },
       "context_length": 2000000
     },
-    "glm-4.6": {
-      "name": "GLM 4.6",
+    "glm-4.7": {
+      "name": "GLM 4.7",
       "imageInput": true,
       "providers": [
         "zhipu",
         "openRouter",
-        "aiGateway",
-        "ollama"
+        "aiGateway"
       ],
       "providerMappings": {
         "zhipu": "glm-4.6",
-        "aiGateway": "zai/glm-4.6",
-        "openRouter": "z-ai/glm-4.6:exacto",
-        "ollama": "glm-4.6:cloud"
+        "aiGateway": "zai/glm-4.7",
+        "openRouter": "z-ai/glm-4.7"
       },
       "pricing": {
-        "input": "0.00000045",
-        "output": "0.0000018",
-        "cachedInput": "0.00000011"
+        "input": "0.0000006",
+        "output": "0.0000022"
       },
       "context_length": 202752
     },
@@ -445,39 +442,24 @@
       },
       "context_length": 131072
     },
-    "minimax-m2": {
-      "name": "MiniMax 2",
+    "minimax-m21": {
+      "name": "MiniMax M2.1",
       "imageInput": true,
       "providers": [
+        "talkcody",
         "MiniMax",
         "aiGateway",
         "openRouter"
       ],
       "providerMappings": {
-        "MiniMax": "MiniMax-M2-Stable",
-        "aiGateway": "minimax/minimax-m2",
-        "openRouter": "minimax/minimax-m2"
-      },
-      "pricing": {
-        "input": "0.00000027",
-        "output": "0.00000115"
-      },
-      "context_length": 204800
-    },
-    "minimax-m21": {
-      "name": "MiniMax M2.1 Beta",
-      "imageInput": true,
-      "providers": [
-        "talkcody",
-        "MiniMax"
-      ],
-      "providerMappings": {
         "talkcody": "MiniMax-M2.1",
-        "MiniMax": "MiniMax-M2.1"
+        "MiniMax": "MiniMax-M2.1",
+        "aiGateway": "minimax/minimax-m2.1",
+        "openRouter": "minimax/minimax-m2.1"
       },
       "pricing": {
-        "input": "0.00000027",
-        "output": "0.00000115"
+        "input": "0.0000003",
+        "output": "0.0000012"
       },
       "context_length": 204800
     },
@@ -495,28 +477,6 @@
         "input": "0.00000007",
         "output": "0.0000003"
       }
-    },
-    "z-ai/glm-4.5-air:free": {
-      "name": "GLM 4.5 Air (Free)",
-      "providers": [
-        "openRouter"
-      ],
-      "pricing": {
-        "input": "0",
-        "output": "0"
-      },
-      "context_length": 131072
-    },
-    "qwen/qwen3-coder:free": {
-      "name": "Qwen 3 Coder (Free)",
-      "providers": [
-        "openRouter"
-      ],
-      "pricing": {
-        "input": "0",
-        "output": "0"
-      },
-      "context_length": 262000
     },
     "gemini-2.5-flash-image": {
       "name": "Nano Banana",

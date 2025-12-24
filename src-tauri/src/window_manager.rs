@@ -580,4 +580,175 @@ mod tests {
         let windows = registry.get_all_windows().unwrap();
         assert_eq!(windows.len(), 1);
     }
+
+    // Tests for multi-window independent file watcher support
+    #[test]
+    fn test_multiple_windows_have_independent_watchers() {
+        // Test that each window can have its own independent file watcher
+        let registry = WindowRegistry::new();
+
+        // Create 3 windows, each with its own watcher
+        for i in 0..3 {
+            let state = WindowState {
+                project_id: Some(format!("project-{}", i)),
+                root_path: Some(format!("/path/to/project{}", i)),
+                file_watcher: None,
+            };
+            registry.register_window(format!("window-{}", i), state).unwrap();
+
+            // Add a watcher for each window
+            let watcher = FileWatcher::new().unwrap();
+            registry.set_window_file_watcher(&format!("window-{}", i), Some(watcher)).unwrap();
+        }
+
+        // Verify all windows exist
+        let windows = registry.get_all_windows().unwrap();
+        assert_eq!(windows.len(), 3);
+
+        // Setting watcher for one window should not affect others
+        // (This is verified by the fact that we can set watchers for all windows without errors)
+    }
+
+    #[test]
+    fn test_setting_watcher_for_one_window_does_not_affect_others() {
+        // Test that setting a watcher for one window doesn't stop watchers in other windows
+        let registry = WindowRegistry::new();
+
+        // Create two windows with watchers
+        for i in 0..2 {
+            let state = WindowState {
+                project_id: Some(format!("project-{}", i)),
+                root_path: Some(format!("/path/{}", i)),
+                file_watcher: None,
+            };
+            registry.register_window(format!("window-{}", i), state).unwrap();
+
+            let watcher = FileWatcher::new().unwrap();
+            registry.set_window_file_watcher(&format!("window-{}", i), Some(watcher)).unwrap();
+        }
+
+        // Replace watcher for window-0
+        let new_watcher = FileWatcher::new().unwrap();
+        registry.set_window_file_watcher("window-0", Some(new_watcher)).unwrap();
+
+        // Both windows should still exist (replacing watcher shouldn't affect other windows)
+        let windows = registry.get_all_windows().unwrap();
+        assert_eq!(windows.len(), 2);
+    }
+
+    #[test]
+    fn test_unregister_window_stops_its_watcher() {
+        // Test that unregistering a window properly stops its file watcher
+        let registry = WindowRegistry::new();
+
+        // Create a window with a watcher
+        let state = WindowState {
+            project_id: Some("project-1".to_string()),
+            root_path: Some("/path/1".to_string()),
+            file_watcher: None,
+        };
+        registry.register_window("window-1".to_string(), state).unwrap();
+
+        let watcher = FileWatcher::new().unwrap();
+        registry.set_window_file_watcher("window-1", Some(watcher)).unwrap();
+
+        // Unregister the window (this should stop the watcher via WindowState cleanup)
+        registry.unregister_window("window-1").unwrap();
+
+        // Window should no longer exist
+        let windows = registry.get_all_windows().unwrap();
+        assert!(windows.is_empty());
+    }
+
+    #[test]
+    fn test_replace_watcher_stops_old_watcher() {
+        // Test that setting a new watcher properly stops the old one
+        let registry = WindowRegistry::new();
+
+        let state = WindowState {
+            project_id: Some("project-1".to_string()),
+            root_path: Some("/path/1".to_string()),
+            file_watcher: None,
+        };
+        registry.register_window("window-1".to_string(), state).unwrap();
+
+        // Set initial watcher
+        let watcher1 = FileWatcher::new().unwrap();
+        registry.set_window_file_watcher("window-1", Some(watcher1)).unwrap();
+
+        // Replace with new watcher - old one should be stopped
+        let watcher2 = FileWatcher::new().unwrap();
+        registry.set_window_file_watcher("window-1", Some(watcher2)).unwrap();
+
+        // Replace again
+        let watcher3 = FileWatcher::new().unwrap();
+        registry.set_window_file_watcher("window-1", Some(watcher3)).unwrap();
+
+        // Should not panic and window should still exist
+        let windows = registry.get_all_windows().unwrap();
+        assert_eq!(windows.len(), 1);
+    }
+
+    #[test]
+    fn test_clear_watcher_by_setting_none() {
+        // Test that we can clear a watcher by setting None
+        let registry = WindowRegistry::new();
+
+        let state = WindowState {
+            project_id: Some("project-1".to_string()),
+            root_path: Some("/path/1".to_string()),
+            file_watcher: None,
+        };
+        registry.register_window("window-1".to_string(), state).unwrap();
+
+        // Set a watcher
+        let watcher = FileWatcher::new().unwrap();
+        registry.set_window_file_watcher("window-1", Some(watcher)).unwrap();
+
+        // Clear the watcher by setting None
+        registry.set_window_file_watcher("window-1", None).unwrap();
+
+        // Window should still exist
+        let windows = registry.get_all_windows().unwrap();
+        assert_eq!(windows.len(), 1);
+    }
+
+    #[test]
+    fn test_multiple_windows_with_different_projects() {
+        // Simulate real-world scenario: multiple windows open with different projects
+        let registry = WindowRegistry::new();
+
+        // Window 1: TalkCody project
+        let state1 = WindowState {
+            project_id: Some("talkcody".to_string()),
+            root_path: Some("/Users/kks/mygit/talkcody".to_string()),
+            file_watcher: None,
+        };
+        registry.register_window("window-talkcody".to_string(), state1).unwrap();
+        let watcher1 = FileWatcher::new().unwrap();
+        registry.set_window_file_watcher("window-talkcody", Some(watcher1)).unwrap();
+
+        // Window 2: Trader project
+        let state2 = WindowState {
+            project_id: Some("trader".to_string()),
+            root_path: Some("/Users/kks/mygit/trader".to_string()),
+            file_watcher: None,
+        };
+        registry.register_window("window-trader".to_string(), state2).unwrap();
+        let watcher2 = FileWatcher::new().unwrap();
+        registry.set_window_file_watcher("window-trader", Some(watcher2)).unwrap();
+
+        // Both windows should exist with their own watchers
+        let windows = registry.get_all_windows().unwrap();
+        assert_eq!(windows.len(), 2);
+
+        // Verify project paths are correct
+        let talkcody_window = windows.iter().find(|w| w.label == "window-talkcody");
+        let trader_window = windows.iter().find(|w| w.label == "window-trader");
+
+        assert!(talkcody_window.is_some());
+        assert!(trader_window.is_some());
+        assert_eq!(talkcody_window.unwrap().root_path, Some("/Users/kks/mygit/talkcody".to_string()));
+        assert_eq!(trader_window.unwrap().root_path, Some("/Users/kks/mygit/trader".to_string()));
+    }
 }

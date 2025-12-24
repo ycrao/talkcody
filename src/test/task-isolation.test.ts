@@ -45,7 +45,7 @@ describe('Conversation Isolation - Critical Bug Tests', () => {
 
       // Simulate some content from first conversation
       processor.processTextDelta('Hello from conversation A', callbacks);
-      processor.processReasoningDelta('test-id', 'Some reasoning', context, callbacks);
+      processor.processReasoningDelta('test-id', 'Some reasoning', undefined, context, callbacks);
 
       // Verify content was accumulated
       expect(processor.getFullText()).toContain('Hello from conversation A');
@@ -117,7 +117,7 @@ describe('Conversation Isolation - Critical Bug Tests', () => {
       const context = { suppressReasoning: false };
 
       // First reasoning
-      processor.processReasoningDelta('test-id', 'reasoning', context, callbacks);
+      processor.processReasoningDelta('test-id', 'reasoning', undefined, context, callbacks);
       expect(processor.getState().isFirstReasoning).toBe(false);
 
       // resetState preserves isFirstReasoning

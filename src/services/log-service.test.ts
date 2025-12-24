@@ -47,11 +47,11 @@ describe('LogService', () => {
       const path = await import('@tauri-apps/api/path');
 
       vi.mocked(os.platform).mockReturnValue('windows');
-      vi.mocked(path.appDataDir).mockResolvedValue('C:\\Users\\test\\AppData\\Local');
+      vi.mocked(path.homeDir).mockResolvedValue('C:\\Users\\test');
       vi.mocked(path.join).mockImplementation((...paths: string[]) => paths.join('\\'));
 
       const result = await logService.getLogDirectoryPath();
-      expect(result).toBe('C:\\Users\\test\\AppData\\Local\\logs');
+      expect(result).toBe('C:\\Users\\test\\AppData\\Local\\com.talkcody\\logs');
     });
 
     it('should return correct path for Linux', async () => {

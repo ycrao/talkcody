@@ -97,13 +97,7 @@ function extractRequestParams(input: RequestInfo | URL, init?: RequestInit) {
   // Add defaults only if not already set (case-insensitive check)
   const headerKeys = Object.keys(headers).map((k) => k.toLowerCase());
   if (!headerKeys.includes('accept')) {
-    headers['Accept'] = 'application/json, text/plain, */*';
-  }
-  if (!headerKeys.includes('accept-language')) {
-    headers['Accept-Language'] = 'en-US,en;q=0.9';
-  }
-  if (!headerKeys.includes('user-agent')) {
-    headers['User-Agent'] = navigator.userAgent;
+    headers.Accept = 'application/json, text/plain, */*';
   }
 
   // Extract body
@@ -156,6 +150,8 @@ export async function simpleFetch(input: RequestInfo | URL, init?: RequestInit):
   }
 
   const { url, method, headers, body } = extractRequestParams(input, init);
+
+  logger.info(`[Simple Fetch] ${method} ${url} headers:`, headers);
 
   const proxyRequest: ProxyRequest = {
     url,

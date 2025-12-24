@@ -4,9 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Store event listeners for simulation
 const eventListeners = new Map<string, ((event: { payload: unknown }) => void)[]>();
 
-// Mock Tauri API
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue(undefined),
+// Mock WindowManagerService
+const mockGetCurrentWindowLabel = vi.fn().mockResolvedValue('test-window-1');
+const mockStartWindowFileWatching = vi.fn().mockResolvedValue(undefined);
+const mockStopWindowFileWatching = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('@/services/window-manager-service', () => ({
+  WindowManagerService: {
+    getCurrentWindowLabel: () => mockGetCurrentWindowLabel(),
+    startWindowFileWatching: (label: string, path: string) => mockStartWindowFileWatching(label, path),
+    stopWindowFileWatching: (label: string) => mockStopWindowFileWatching(label),
+  },
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
@@ -285,32 +293,61 @@ describe('useRepositoryWatcher', () => {
       });
     });
 
-    it('should start file watching on mount', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
+    it('should start window-specific file watching on mount', async () => {
       const useRepositoryWatcher = await getHook();
 
       renderHook(() => useRepositoryWatcher());
 
       await vi.waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('start_file_watching', { path: '/test/repo' });
+        // Should get current window label
+        expect(mockGetCurrentWindowLabel).toHaveBeenCalled();
+        // Should start watching for this specific window
+        expect(mockStartWindowFileWatching).toHaveBeenCalledWith('test-window-1', '/test/repo');
       });
     });
 
-    it('should stop file watching on unmount', async () => {
-      const { invoke } = await import('@tauri-apps/api/core');
+    it('should stop window-specific file watching on unmount', async () => {
       const useRepositoryWatcher = await getHook();
 
       const { unmount } = renderHook(() => useRepositoryWatcher());
 
       await vi.waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('start_file_watching', { path: '/test/repo' });
+        expect(mockStartWindowFileWatching).toHaveBeenCalledWith('test-window-1', '/test/repo');
       });
 
       unmount();
 
       await vi.waitFor(() => {
-        expect(invoke).toHaveBeenCalledWith('stop_file_watching');
+        expect(mockStopWindowFileWatching).toHaveBeenCalledWith('test-window-1');
       });
+    });
+
+    it('should support multiple windows with different labels', async () => {
+      // Simulate different window labels for different instances
+      mockGetCurrentWindowLabel
+        .mockResolvedValueOnce('window-project-a')
+        .mockResolvedValueOnce('window-project-b');
+
+      const useRepositoryWatcher = await getHook();
+
+      // First window
+      const { unmount: unmount1 } = renderHook(() => useRepositoryWatcher());
+      await vi.waitFor(() => {
+        expect(mockStartWindowFileWatching).toHaveBeenCalledWith('window-project-a', '/test/repo');
+      });
+
+      // Second window
+      const { unmount: unmount2 } = renderHook(() => useRepositoryWatcher());
+      await vi.waitFor(() => {
+        expect(mockStartWindowFileWatching).toHaveBeenCalledWith('window-project-b', '/test/repo');
+      });
+
+      // Each window should have its own watcher
+      expect(mockStartWindowFileWatching).toHaveBeenCalledTimes(2);
+
+      // Cleanup
+      unmount1();
+      unmount2();
     });
   });
 });

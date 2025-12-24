@@ -1,8 +1,8 @@
 // src/services/ai-completion-service.ts
 import { streamText } from 'ai';
 import { logger } from '@/lib/logger';
-import { CODE_STARL } from '@/lib/models';
-import { aiProviderService } from './ai-provider-service';
+import { CODE_STARL } from '@/providers/config/model-config';
+import { aiProviderService } from '@/providers/core/provider-factory';
 
 export interface CompletionContext {
   fileContent: string;

@@ -29,8 +29,8 @@ describe('StreamProcessor reasoning persistence', () => {
     const context = createContext();
 
     // Iteration 1: Reasoning appears
-    processor.processReasoningDelta('test-id', 'I need to think about this', context, callbacks);
-    processor.processReasoningDelta('test-id', ' carefully.', context, callbacks);
+    processor.processReasoningDelta('test-id', 'I need to think about this', undefined, context, callbacks);
+    processor.processReasoningDelta('test-id', ' carefully.', undefined, context, callbacks);
 
     // Check that reasoning was added to fullText
     const fullTextBeforeReset = processor.getFullText();
@@ -59,7 +59,7 @@ describe('StreamProcessor reasoning persistence', () => {
     const context = createContext();
 
     // Iteration 1: Reasoning
-    processor.processReasoningDelta('test-id', 'First, I need to analyze', context, callbacks);
+    processor.processReasoningDelta('test-id', 'First, I need to analyze', undefined, context, callbacks);
     const fullText1 = processor.getFullText();
     expect(fullText1).toContain('Reasoning:');
     expect(fullText1).toContain('First, I need to analyze');
@@ -87,14 +87,14 @@ describe('StreamProcessor reasoning persistence', () => {
     const context = createContext();
 
     // Iteration 1: First reasoning
-    processor.processReasoningDelta('test-id', 'First thought', context, callbacks);
+    processor.processReasoningDelta('test-id', 'First thought', undefined, context, callbacks);
     expect(processor.getFullText()).toContain('Reasoning:');
 
     // Reset for iteration 2
     processor.resetState();
 
     // Iteration 2: Try to add more reasoning (should not add header again)
-    processor.processReasoningDelta('test-id', 'Second thought', context, callbacks);
+    processor.processReasoningDelta('test-id', 'Second thought', undefined, context, callbacks);
     const fullText = processor.getFullText();
 
     // Count occurrences of "Reasoning:"
@@ -111,13 +111,13 @@ describe('StreamProcessor reasoning persistence', () => {
     const context = createContext();
 
     // First reasoning delta sets isFirstReasoning to false
-    processor.processReasoningDelta('test-id', 'Initial reasoning', context, callbacks);
+    processor.processReasoningDelta('test-id', 'Initial reasoning', undefined, context, callbacks);
 
     // Reset state
     processor.resetState();
 
     // Second reasoning delta should NOT add the header again
-    processor.processReasoningDelta('test-id', 'More reasoning', context, callbacks);
+    processor.processReasoningDelta('test-id', 'More reasoning', undefined, context, callbacks);
 
     const fullText = processor.getFullText();
     const reasoningHeaderCount = (fullText.match(/Reasoning:/g) || []).length;
@@ -129,14 +129,14 @@ describe('StreamProcessor reasoning persistence', () => {
     const context = createContext();
 
     // Iteration 1: Reasoning + Text
-    processor.processReasoningDelta('test-id', 'I should search for the file', context, callbacks);
+    processor.processReasoningDelta('test-id', 'I should search for the file', undefined, context, callbacks);
     processor.processTextDelta('Let me search the codebase.', callbacks);
     const _iteration1Text = processor.getFullText();
 
     // Iteration 2: Tool call, then more reasoning
     processor.resetState();
-    processor.processReasoningDelta('test-id', ' Now I found it,', context, callbacks);
-    processor.processReasoningDelta('test-id', ' let me read it.', context, callbacks);
+    processor.processReasoningDelta('test-id', ' Now I found it,', undefined, context, callbacks);
+    processor.processReasoningDelta('test-id', ' let me read it.', undefined, context, callbacks);
     const _iteration2Text = processor.getFullText();
 
     // Iteration 3: Tool call, then final answer
@@ -188,14 +188,14 @@ describe('StreamProcessor reasoning persistence', () => {
     const contextSuppressed = createContext(true);
 
     // Try to add reasoning with suppression enabled
-    processor.processReasoningDelta('test-id', 'This should not appear', contextSuppressed, callbacks);
+    processor.processReasoningDelta('test-id', 'This should not appear', undefined, contextSuppressed, callbacks);
 
     // fullText should be empty
     expect(processor.getFullText()).toBe('');
 
     // Now disable suppression
     const contextNotSuppressed = createContext(false);
-    processor.processReasoningDelta('test-id', 'This should appear', contextNotSuppressed, callbacks);
+    processor.processReasoningDelta('test-id', 'This should appear', undefined, contextNotSuppressed, callbacks);
 
     // fullText should now contain the reasoning
     expect(processor.getFullText()).toContain('Reasoning:');
@@ -208,7 +208,7 @@ describe('StreamProcessor reasoning persistence', () => {
     const context = createContext();
 
     // Add reasoning and text before "tool call"
-    processor.processReasoningDelta('test-id', 'Analyzing the problem', context, callbacks);
+    processor.processReasoningDelta('test-id', 'Analyzing the problem', undefined, context, callbacks);
     processor.processTextDelta('Some text before tool call', callbacks);
 
     expect(processor.getFullText()).toContain('Reasoning:');
@@ -254,7 +254,7 @@ describe('StreamProcessor reasoning persistence', () => {
     const context = createContext();
 
     // Process reasoning
-    processor.processReasoningDelta('test-id', 'Line 1\nLine 2', context, callbacks);
+    processor.processReasoningDelta('test-id', 'Line 1\nLine 2', undefined, context, callbacks);
 
     const fullText = processor.getFullText();
 

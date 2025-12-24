@@ -5,8 +5,8 @@ import {
   removeOrphanedToolMessages,
 } from '@/lib/message-convert';
 import { validateAnthropicMessages } from '@/lib/message-validate';
-import { GEMINI_25_FLASH_LITE, getContextLength } from '@/lib/models';
 import { timedMethod } from '@/lib/timer';
+import { GEMINI_25_FLASH_LITE, getContextLength } from '@/providers/config/model-config';
 import type {
   AgentLoopCallbacks,
   AgentLoopOptions,

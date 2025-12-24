@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { AddCustomModelDialog } from './add-custom-model-dialog';
-import { customModelService } from '@/services/custom-model-service';
+import { customModelService } from '@/providers/custom/custom-model-service';
 
 // Mock scrollIntoView for Radix UI Select
 Element.prototype.scrollIntoView = vi.fn();
@@ -53,7 +53,7 @@ vi.mock('@/components/ui/checkbox', () => ({
   ),
 }));
 
-vi.mock('@/services/custom-model-service', () => ({
+vi.mock('@/providers/custom/custom-model-service', () => ({
   customModelService: {
     getAvailableProvidersForFetch: vi.fn(() => Promise.resolve([{ id: 'p1', name: 'Provider1' }])),
     fetchProviderModels: vi.fn(),

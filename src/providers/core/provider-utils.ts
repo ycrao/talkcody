@@ -1,17 +1,29 @@
-// src/lib/provider-utils.ts
+// src/providers/core/provider-utils.ts
 // Pure utility functions for provider/model operations - no state management
 
 import { logger } from '@/lib/logger';
-import { getProvidersForModel, MODEL_CONFIGS } from '@/lib/models';
-import { createCustomProvider } from '@/providers/custom-provider-factory';
-import { PROVIDER_CONFIGS } from '@/providers/provider_config';
-import { isLocalProvider } from '@/services/custom-model-service';
+import { getProvidersForModel, MODEL_CONFIGS } from '@/providers/config/model-config';
+import { isLocalProvider } from '@/providers/custom/custom-model-service';
+import { createCustomProvider } from '@/providers/custom/custom-provider-factory';
 import type { ProviderDefinition } from '@/types';
 import type { AvailableModel } from '@/types/api-keys';
 import type { CustomProviderConfig } from '@/types/custom-provider';
 import type { ModelConfig } from '@/types/models';
+import {
+  createAnthropicOAuthProvider,
+  createOpenAIOAuthProvider,
+  PROVIDER_CONFIGS,
+} from '../config/provider-config';
+
+// OAuth configuration for provider creation
+export interface OAuthConfig {
+  anthropicAccessToken?: string | null;
+  openaiAccessToken?: string | null;
+  openaiAccountId?: string | null;
+}
 
 // Type for provider factory function (returns a function that creates model instances)
+// biome-ignore lint/suspicious/noExplicitAny: Provider return types vary by implementation
 export type ProviderFactory = (modelName: string) => any;
 
 /**
@@ -41,11 +53,12 @@ export function resolveProviderModelName(modelKey: string, providerId: string): 
 }
 
 /**
- * Check if API key is configured for a provider
+ * Check if API key or OAuth is configured for a provider
  */
 export function hasApiKeyForProvider(
   providerId: string,
-  apiKeys: Record<string, string | undefined>
+  apiKeys: Record<string, string | undefined>,
+  oauthConfig?: OAuthConfig
 ): boolean {
   // TalkCody Free is always available - auth check happens at usage time
   if (providerId === 'talkcody') {
@@ -55,6 +68,16 @@ export function hasApiKeyForProvider(
   // Local providers (Ollama, LM Studio) use 'enabled' instead of API key
   if (isLocalProvider(providerId)) {
     return apiKeys[providerId] === 'enabled';
+  }
+
+  // Check OAuth for Anthropic
+  if (providerId === 'anthropic' && oauthConfig?.anthropicAccessToken) {
+    return true;
+  }
+
+  // Check OAuth for OpenAI
+  if (providerId === 'openai' && oauthConfig?.openaiAccessToken) {
+    return true;
   }
 
   const apiKey = apiKeys[providerId];
@@ -67,13 +90,14 @@ export function hasApiKeyForProvider(
 export function getBestProvider(
   modelKey: string,
   apiKeys: Record<string, string | undefined>,
-  customProviders: CustomProviderConfig[]
+  customProviders: CustomProviderConfig[],
+  oauthConfig?: OAuthConfig
 ): string | null {
   const providers = getProvidersForModel(modelKey);
 
   for (const provider of providers) {
     // Check built-in provider
-    if (hasApiKeyForProvider(provider.id, apiKeys)) {
+    if (hasApiKeyForProvider(provider.id, apiKeys, oauthConfig)) {
       return provider.id;
     }
 
@@ -117,7 +141,8 @@ export function createProviders(
   apiKeys: Record<string, string | undefined>,
   providerConfigs: Map<string, ProviderDefinition>,
   baseUrls: Map<string, string>,
-  useCodingPlanSettings: Map<string, boolean>
+  useCodingPlanSettings: Map<string, boolean>,
+  oauthConfig?: OAuthConfig
 ): Map<string, ProviderFactory> {
   const providers = new Map<string, ProviderFactory>();
 
@@ -132,9 +157,21 @@ export function createProviders(
     // TalkCody Free uses JWT auth, not API key - always create it
     const isTalkCody = providerId === 'talkcody';
 
-    // Skip if no API key (except for special providers)
-    if (!apiKey && !isTalkCody) {
-      logger.debug(`Skipping provider ${providerId}: no API key configured`);
+    // Check if this provider uses OAuth (e.g., Anthropic with Claude Pro/Max, OpenAI with ChatGPT Plus/Pro)
+    const useAnthropicOAuth =
+      providerId === 'anthropic' &&
+      providerDef.supportsOAuth &&
+      oauthConfig?.anthropicAccessToken &&
+      !baseUrls.has(providerId); // Don't use OAuth if custom base URL is set
+
+    const useOpenAIOAuth =
+      providerId === 'openai' && oauthConfig?.openaiAccessToken && !baseUrls.has(providerId); // Don't use OAuth if custom base URL is set
+
+    const useOAuth = useAnthropicOAuth || useOpenAIOAuth;
+
+    // Skip if no API key and no OAuth (except for special providers)
+    if (!apiKey && !isTalkCody && !useOAuth) {
+      logger.debug(`Skipping provider ${providerId}: no API key or OAuth configured`);
       continue;
     }
 
@@ -143,29 +180,49 @@ export function createProviders(
       continue;
     }
 
-    // Create provider using the definition's factory function
-    if (providerDef.createProvider) {
-      // Use custom base URL if set, otherwise use the default from provider definition
-      let customBaseUrl = baseUrls.get(providerId);
-
-      // Special handling for providers with Coding Plan: determine base URL based on useCodingPlan setting
-      if (!customBaseUrl) {
-        const useCodingPlan = useCodingPlanSettings.get(providerId);
-        if (useCodingPlan && providerDef.codingPlanBaseUrl) {
-          customBaseUrl = providerDef.codingPlanBaseUrl;
-        }
+    // Create provider using OAuth or API key
+    try {
+      if (useAnthropicOAuth && oauthConfig?.anthropicAccessToken) {
+        // Use OAuth provider for Anthropic
+        logger.info(`Creating Anthropic provider with OAuth`);
+        const createdProvider = createAnthropicOAuthProvider(oauthConfig.anthropicAccessToken);
+        providers.set(providerId, createdProvider);
+        continue;
       }
 
-      const baseUrl = customBaseUrl || providerDef.baseUrl;
-      try {
+      if (useOpenAIOAuth && oauthConfig?.openaiAccessToken) {
+        // Use OAuth provider for OpenAI
+        logger.info(`Creating OpenAI provider with OAuth`);
+        const createdProvider = createOpenAIOAuthProvider(
+          oauthConfig.openaiAccessToken,
+          oauthConfig.openaiAccountId
+        );
+        providers.set(providerId, createdProvider);
+        continue;
+      }
+
+      // Create provider using the definition's factory function
+      if (providerDef.createProvider) {
+        // Use custom base URL if set, otherwise use the default from provider definition
+        let customBaseUrl = baseUrls.get(providerId);
+
+        // Special handling for providers with Coding Plan: determine base URL based on useCodingPlan setting
+        if (!customBaseUrl) {
+          const useCodingPlan = useCodingPlanSettings.get(providerId);
+          if (useCodingPlan && providerDef.codingPlanBaseUrl) {
+            customBaseUrl = providerDef.codingPlanBaseUrl;
+          }
+        }
+
+        const baseUrl = customBaseUrl || providerDef.baseUrl;
         // For talkcody, apiKey is not used (uses JWT auth), pass empty string
         const createdProvider = providerDef.createProvider(apiKey || '', baseUrl);
         providers.set(providerId, createdProvider);
-      } catch (error) {
-        logger.error(`Failed to create provider ${providerId}:`, error);
+      } else {
+        logger.warn(`Provider ${providerId} has no createProvider function`);
       }
-    } else {
-      logger.warn(`Provider ${providerId} has no createProvider function`);
+    } catch (error) {
+      logger.error(`Failed to create provider ${providerId}:`, error);
     }
   }
 
@@ -180,9 +237,10 @@ export function createProviders(
  */
 export function computeAvailableModels(
   apiKeys: Record<string, string | undefined>,
-  providerConfigs: Map<string, ProviderDefinition>,
+  _providerConfigs: Map<string, ProviderDefinition>,
   customProviders: CustomProviderConfig[],
-  customModels: Record<string, ModelConfig>
+  customModels: Record<string, ModelConfig>,
+  oauthConfig?: OAuthConfig
 ): AvailableModel[] {
   // Use Map for O(1) deduplication lookup - key is "${modelKey}-${providerId}"
   const modelMap = new Map<string, AvailableModel>();
@@ -203,7 +261,7 @@ export function computeAvailableModels(
     const providers = getProvidersForModel(modelKey);
     const availableProviders = providers.filter((provider) => {
       // Check built-in provider
-      if (hasApiKeyForProvider(provider.id, apiKeys)) {
+      if (hasApiKeyForProvider(provider.id, apiKeys, oauthConfig)) {
         return true;
       }
       // Check custom provider
@@ -232,7 +290,7 @@ export function computeAvailableModels(
     // Custom models have explicit providers, check if provider is available
     for (const providerId of modelConfig.providers) {
       // Check if it's a built-in provider with API key, or an enabled custom provider
-      const isBuiltInWithKey = hasApiKeyForProvider(providerId, apiKeys);
+      const isBuiltInWithKey = hasApiKeyForProvider(providerId, apiKeys, oauthConfig);
       const isCustomProviderEnabled = customProviderIds.has(providerId);
 
       if (isBuiltInWithKey || isCustomProviderEnabled) {
@@ -271,13 +329,14 @@ export function computeAvailableModels(
 export function isModelAvailable(
   modelIdentifier: string,
   apiKeys: Record<string, string | undefined>,
-  customProviders: CustomProviderConfig[]
+  customProviders: CustomProviderConfig[],
+  oauthConfig?: OAuthConfig
 ): boolean {
   const { modelKey, providerId } = parseModelIdentifier(modelIdentifier);
 
   if (providerId) {
     // Check specific provider
-    if (hasApiKeyForProvider(providerId, apiKeys)) {
+    if (hasApiKeyForProvider(providerId, apiKeys, oauthConfig)) {
       return true;
     }
     // Check if it's an enabled custom provider
@@ -286,7 +345,7 @@ export function isModelAvailable(
   }
 
   // Check if any provider is available
-  const provider = getBestProvider(modelKey, apiKeys, customProviders);
+  const provider = getBestProvider(modelKey, apiKeys, customProviders, oauthConfig);
   return provider !== null;
 }
 

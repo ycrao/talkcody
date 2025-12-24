@@ -1,8 +1,8 @@
 // src/stores/settings-store.ts
 import { create } from 'zustand';
 import { logger } from '@/lib/logger';
-import { GROK_CODE_FAST } from '@/lib/models';
 import { providerRegistry } from '@/providers';
+import { GROK_CODE_FAST } from '@/providers/config/model-config';
 import type { TursoClient } from '@/services/database/turso-client';
 import { databaseService } from '@/services/database-service';
 import type { ApiKeySettings, CustomProviderApiKeys } from '@/types/api-keys';
@@ -674,13 +674,13 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   getCustomProviderApiKeys: async () => {
     // Get custom provider configurations and extract API keys
     try {
-      const { customProviderService } = await import('@/services/custom-provider-service');
+      const { customProviderService } = await import('@/providers/custom/custom-provider-service');
       const config = await customProviderService.getCustomProviders();
 
       const apiKeys: CustomProviderApiKeys = {};
-      for (const [providerId, provider] of Object.entries(config.providers)) {
-        if (provider.apiKey) {
-          apiKeys[providerId] = provider.apiKey;
+      for (const [providerId, providerConfig] of Object.entries(config.providers)) {
+        if (providerConfig.apiKey) {
+          apiKeys[providerId] = providerConfig.apiKey;
         }
       }
 

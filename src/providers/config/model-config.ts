@@ -9,8 +9,8 @@ export const NANO_BANANA_PRO = 'gemini-3-pro-image';
 export const SCRIBE_V2_REALTIME = 'scribe-v2-realtime';
 
 import { logger } from '@/lib/logger';
-import { modelLoader } from '@/lib/model-loader';
 import { providerRegistry } from '@/providers';
+import { modelLoader } from '@/providers/models/model-loader';
 import type { ProviderConfig } from '@/types/api-keys';
 import type { ModelConfig as ModelConfigType } from '@/types/models';
 

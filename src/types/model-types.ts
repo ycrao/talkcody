@@ -4,7 +4,7 @@ import {
   MINIMAX_M21,
   NANO_BANANA_PRO,
   SCRIBE_V2_REALTIME,
-} from '@/lib/models';
+} from '@/providers/config/model-config';
 
 export enum ModelType {
   MAIN = 'main_model',

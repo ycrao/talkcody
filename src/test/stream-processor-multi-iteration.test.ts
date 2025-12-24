@@ -230,7 +230,7 @@ describe('StreamProcessor multi-iteration behavior', () => {
     };
 
     // AI returns only reasoning content without text-start or text-delta
-    processor.processReasoningDelta('test-id', 'Thinking about the problem...', context, callbacks);
+    processor.processReasoningDelta('test-id', 'Thinking about the problem...', undefined, context, callbacks);
 
     // Should call onAssistantMessageStart even for reasoning-only content
     expect(onAssistantMessageStartCalls).toBe(1);
@@ -253,7 +253,7 @@ describe('StreamProcessor multi-iteration behavior', () => {
     };
 
     // AI returns reasoning but it's suppressed
-    processor.processReasoningDelta('test-id', 'Thinking about the problem...', context, callbacks);
+    processor.processReasoningDelta('test-id', 'Thinking about the problem...', undefined, context, callbacks);
 
     // Should NOT call onAssistantMessageStart when reasoning is suppressed
     expect(onAssistantMessageStartCalls).toBe(0);
@@ -276,11 +276,11 @@ describe('StreamProcessor multi-iteration behavior', () => {
     };
 
     // First reasoning
-    processor.processReasoningDelta('test-id', 'Analyzing...', context, callbacks);
+    processor.processReasoningDelta('test-id', 'Analyzing...', undefined, context, callbacks);
     expect(onAssistantMessageStartCalls).toBe(1);
 
     // More reasoning
-    processor.processReasoningDelta('test-id', 'Considering options...', context, callbacks);
+    processor.processReasoningDelta('test-id', 'Considering options...', undefined, context, callbacks);
     expect(onAssistantMessageStartCalls).toBe(1); // Should not be called again
 
     // Then text

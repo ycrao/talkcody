@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { create } from 'zustand';
 import { logger } from '@/lib/logger';
 import { getLocale, type SupportedLocale } from '@/locales';
-import { updateTalkCodyAuthCache } from '@/providers/talkcody-provider';
+import { updateTalkCodyAuthCache } from '@/providers/core/talkcody-provider';
 import { authService } from '@/services/auth-service';
 import { useSettingsStore } from '@/stores/settings-store';
 

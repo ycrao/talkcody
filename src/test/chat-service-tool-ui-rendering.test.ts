@@ -17,11 +17,11 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/services/model-service', () => ({
+vi.mock('@/providers/models/model-service', () => ({
   modelService: { isModelAvailableSync: vi.fn(() => true) },
 }));
 
-vi.mock('@/services/ai-provider-service', () => ({
+vi.mock('@/providers/core/provider-factory', () => ({
   aiProviderService: {
     getProviderModel: vi.fn(() => ({ modelId: 'test-model', provider: 'test' })),
   },

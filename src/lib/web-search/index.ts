@@ -1,11 +1,13 @@
 import { logger } from '@/lib/logger';
 import { settingsManager } from '@/stores/settings-store';
+import { ExaSearch, isExaMCPAvailable } from './exa-search';
 import { GLMSearch, isGLMMCPAvailable } from './glm-search';
 import { isMiniMaxMCPAvailable, MiniMaxSearch } from './minimax-search';
 import { SerperSearch } from './serper-search';
 import { TavilySearch } from './tavily-search';
 import type { WebSearchResult } from './types';
 
+export { ExaSearch } from './exa-search';
 export { GLMSearch } from './glm-search';
 export { MiniMaxSearch } from './minimax-search';
 export { SerperSearch } from './serper-search';
@@ -15,12 +17,15 @@ export type { SearchOptions, WebSearchResult, WebSearchSource } from './types';
 
 /**
  * Unified web search function with fallback providers
- * Priority: Tavily → Serper → MiniMax Coding Plan → GLM Coding Plan
+ * Priority: Tavily → Serper → MiniMax Coding Plan → GLM Coding Plan → Exa (free)
  */
 export async function webSearch(query: string): Promise<WebSearchResult[]> {
   const apiKeys = await settingsManager.getApiKeys();
   const hasTavilyKey = !!apiKeys.tavily;
   const hasSerperKey = !!apiKeys.serper;
+
+  // Check Exa MCP availability
+  const exaAvailable = isExaMCPAvailable();
 
   // Check MiniMax Coding Plan availability
   const hasMiniMaxKey = !!apiKeys.MiniMax;
@@ -33,6 +38,7 @@ export async function webSearch(query: string): Promise<WebSearchResult[]> {
   const glmAvailable = isGLMMCPAvailable();
 
   logger.info('Web Search - Available Providers', {
+    exaAvailable,
     hasTavilyKey,
     hasSerperKey,
     hasMiniMaxKey,
@@ -101,6 +107,23 @@ export async function webSearch(query: string): Promise<WebSearchResult[]> {
       logger.warn('GLM webSearchPrime returned empty results, trying next provider');
     } catch (error) {
       logger.warn('GLM webSearchPrime failed, trying next provider:', error);
+    }
+  }
+
+  // Priority 5: Exa Search (free, as last fallback)
+  if (exaAvailable) {
+    try {
+      logger.info('Using Exa Search (free fallback)');
+      const exaSearch = new ExaSearch();
+      const results = await exaSearch.search(query);
+
+      if (results.length > 0) {
+        logger.info('Exa results count:', results.length);
+        return results;
+      }
+      logger.warn('Exa returned empty results');
+    } catch (error) {
+      logger.warn('Exa search failed:', error);
     }
   }
 

@@ -499,7 +499,7 @@ class AgentRegistry {
     // Step 2: Resolve model type to concrete model
     let resolvedModel: string;
     try {
-      const { modelTypeService } = await import('@/services/model-type-service');
+      const { modelTypeService } = await import('@/providers/models/model-type-service');
 
       // Resolve the model type to a concrete model using settings
       resolvedModel = await modelTypeService.resolveModelType(agent.modelType);

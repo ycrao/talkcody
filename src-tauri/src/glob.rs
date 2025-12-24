@@ -11,6 +11,9 @@ const DEFAULT_MAX_GLOB_RESULTS: usize = 100;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobResult {
     pub path: String,
+    /// Canonical (resolved) path - resolves symlinks to their real location
+    /// Used for security validation to prevent symlink attacks
+    pub canonical_path: String,
     pub is_directory: bool,
     pub modified_time: u64,
 }
@@ -79,6 +82,12 @@ impl HighPerformanceGlob {
 
                 // Use glob pattern matching
                 if self.matches_glob_pattern(&path_str, pattern, root_path) {
+                    // Get canonical path (resolves symlinks) for security validation
+                    // If canonicalize fails (e.g., broken symlink), use the original path
+                    let canonical_path = path.canonicalize()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| path_str.clone());
+
                     // Get modification time
                     let modified_time = if let Ok(metadata) = path.metadata() {
                         if let Ok(modified) = metadata.modified() {
@@ -96,6 +105,7 @@ impl HighPerformanceGlob {
 
                     results.push(GlobResult {
                         path: path_str,
+                        canonical_path,
                         is_directory: path.is_dir(),
                         modified_time,
                     });
@@ -413,6 +423,7 @@ mod tests {
     fn test_glob_result_serialization() {
         let result = GlobResult {
             path: "/path/to/file.ts".to_string(),
+            canonical_path: "/path/to/file.ts".to_string(),
             is_directory: false,
             modified_time: 1700000000,
         };

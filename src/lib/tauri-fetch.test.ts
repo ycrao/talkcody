@@ -156,7 +156,6 @@ describe('tauri-fetch', () => {
         request: expect.objectContaining({
           headers: expect.objectContaining({
             Accept: 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
           }),
         }),
       });

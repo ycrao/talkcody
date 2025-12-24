@@ -1,11 +1,11 @@
-// src/providers/registry.ts
+// src/providers/core/provider-registry.ts
 import { logger } from '@/lib/logger';
-import { isLocalProvider } from '@/services/custom-model-service';
-import { customProviderService } from '@/services/custom-provider-service';
+import { isLocalProvider } from '@/providers/custom/custom-model-service';
+import { createCustomProvider } from '@/providers/custom/custom-provider-factory';
+import { customProviderService } from '@/providers/custom/custom-provider-service';
 import type { ProviderDefinition } from '@/types';
 import type { CustomProviderConfig } from '@/types/custom-provider';
-import { createCustomProvider } from './custom-provider-factory';
-import { PROVIDER_CONFIGS } from './provider_config';
+import { PROVIDER_CONFIGS } from '../config/provider-config';
 
 export class ProviderRegistry {
   private static instance: ProviderRegistry;
@@ -145,7 +145,11 @@ export class ProviderRegistry {
   }
 
   // Check if API key is configured for provider
-  hasApiKey(providerId: string, apiKeys: Record<string, any>): boolean {
+  hasApiKey(
+    providerId: string,
+    apiKeys: Record<string, string | undefined>,
+    oauthConfig?: { anthropicAccessToken?: string | null; openaiAccessToken?: string | null }
+  ): boolean {
     const provider = this.getProvider(providerId);
     if (!provider) {
       logger.warn('[hasApiKey] Provider not found', { providerId });
@@ -161,6 +165,16 @@ export class ProviderRegistry {
     if (isLocalProvider(providerId)) {
       const result = apiKeys[providerId] === 'enabled';
       return result;
+    }
+
+    // Check OAuth for Anthropic
+    if (providerId === 'anthropic' && oauthConfig?.anthropicAccessToken) {
+      return true;
+    }
+
+    // Check OAuth for OpenAI
+    if (providerId === 'openai' && oauthConfig?.openaiAccessToken) {
+      return true;
     }
 
     const apiKey = apiKeys[providerId];

@@ -46,6 +46,23 @@ const mockTranslations = {
       edit: 'Edit',
       cancel: 'Cancel',
     },
+    claudeOAuth: {
+      title: 'Claude Pro/Max',
+      description: 'Sign in with your Claude Pro or Max subscription',
+      signIn: 'Sign in with Claude',
+      browserOpened: 'Browser opened. Complete authentication.',
+      pasteCode: 'Please enter the authorization code',
+      pasteCodeLabel: 'Authorization Code',
+      codePlaceholder: 'Paste the code here...',
+      connect: 'Connect',
+      connected: 'Connected to Claude',
+      connectedWithPlan: 'Connected with Claude Pro/Max',
+      disconnect: 'Disconnect',
+      disconnected: 'Disconnected from Claude',
+      useApiKeyInstead: 'Use API key instead',
+      connectionFailed: 'Connection failed. Please try again.',
+      tokenRefreshFailed: 'Session expired. Please reconnect.',
+    },
   },
 };
 
@@ -106,14 +123,14 @@ vi.mock('@/providers', () => ({
 }));
 
 // Mock ai-provider-service
-vi.mock('@/services/ai-provider-service', () => ({
+vi.mock('@/providers/core/provider-factory', () => ({
   aiProviderService: {
     refreshProviders: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
 // Mock custom-model-service
-vi.mock('@/services/custom-model-service', () => ({
+vi.mock('@/providers/custom/custom-model-service', () => ({
   customModelService: {
     supportsModelsFetch: vi.fn().mockReturnValue(true),
     fetchProviderModels: vi.fn(),
@@ -132,9 +149,35 @@ vi.mock('@/stores/settings-store', () => ({
   },
 }));
 
+// Mock claude-oauth-store
+vi.mock('@/providers/oauth/claude-oauth-store', () => ({
+  useClaudeOAuthStore: vi.fn(() => ({ isConnected: false })),
+}));
+
+// Mock provider-store
+const mockRefresh = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/stores/provider-store', () => ({
+  useProviderStore: Object.assign(vi.fn(() => ({})), {
+    getState: () => ({ refresh: mockRefresh }),
+  }),
+}));
+
+// Mock database-service
+vi.mock('@/services/database-service', () => ({
+  databaseService: {
+    getMCPServer: vi.fn().mockResolvedValue(null),
+    updateMCPServer: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+// Mock ClaudeOAuthLogin component
+vi.mock('@/components/settings/claude-oauth-login', () => ({
+  ClaudeOAuthLogin: () => <div data-testid="claude-oauth-login">Claude OAuth Login</div>,
+}));
+
 // Import after mocks
 import { ApiKeysSettings } from './api-keys-settings';
-import { customModelService } from '@/services/custom-model-service';
+import { customModelService } from '@/providers/custom/custom-model-service';
 import { settingsManager } from '@/stores/settings-store';
 
 describe('ApiKeysSettings - Connection Test Error Messages', () => {
@@ -156,6 +199,10 @@ describe('ApiKeysSettings - Connection Test Error Messages', () => {
     // First, expand the Anthropic provider by clicking on its collapsible trigger
     const anthropicTrigger = await screen.findByRole('button', { name: /anthropic/i });
     fireEvent.click(anthropicTrigger);
+
+    // Expand the "Use API key instead" section for Anthropic (which uses OAuth by default)
+    const useApiKeyButton = await screen.findByRole('button', { name: /use api key instead/i });
+    fireEvent.click(useApiKeyButton);
 
     // Now find the Test button within the expanded content
     const testButton = await screen.findByRole('button', { name: /test/i });
@@ -183,6 +230,10 @@ describe('ApiKeysSettings - Connection Test Error Messages', () => {
     const anthropicTrigger = await screen.findByRole('button', { name: /anthropic/i });
     fireEvent.click(anthropicTrigger);
 
+    // Expand the "Use API key instead" section for Anthropic (which uses OAuth by default)
+    const useApiKeyButton = await screen.findByRole('button', { name: /use api key instead/i });
+    fireEvent.click(useApiKeyButton);
+
     // Now find the Test button within the expanded content
     const testButton = await screen.findByRole('button', { name: /test/i });
     fireEvent.click(testButton);
@@ -208,6 +259,10 @@ describe('ApiKeysSettings - Connection Test Error Messages', () => {
     const anthropicTrigger = await screen.findByRole('button', { name: /anthropic/i });
     fireEvent.click(anthropicTrigger);
 
+    // Expand the "Use API key instead" section for Anthropic (which uses OAuth by default)
+    const useApiKeyButton = await screen.findByRole('button', { name: /use api key instead/i });
+    fireEvent.click(useApiKeyButton);
+
     // Now find the Test button within the expanded content
     const testButton = await screen.findByRole('button', { name: /test/i });
     fireEvent.click(testButton);
@@ -232,6 +287,10 @@ describe('ApiKeysSettings - Connection Test Error Messages', () => {
     // First, expand the Anthropic provider by clicking on its collapsible trigger
     const anthropicTrigger = await screen.findByRole('button', { name: /anthropic/i });
     fireEvent.click(anthropicTrigger);
+
+    // Expand the "Use API key instead" section for Anthropic (which uses OAuth by default)
+    const useApiKeyButton = await screen.findByRole('button', { name: /use api key instead/i });
+    fireEvent.click(useApiKeyButton);
 
     // Now find the Test button within the expanded content
     const testButton = await screen.findByRole('button', { name: /test/i });

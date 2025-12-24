@@ -5,14 +5,14 @@ import { LLMService } from '../services/agents/llm-service';
 import type { AgentLoopOptions, UIMessage } from '../types/agent';
 
 // Mock additional dependencies
-vi.mock('../services/model-service', () => ({
+vi.mock('@/providers/models/model-service', () => ({
   modelService: {
     isModelAvailableSync: vi.fn().mockReturnValue(true),
     getBestProviderForModelSync: vi.fn().mockReturnValue('test-provider'),
   },
 }));
 
-vi.mock('../services/ai-provider-service', () => ({
+vi.mock('@/providers/core/provider-factory', () => ({
   aiProviderService: {
     getProviderModel: vi.fn().mockReturnValue({
       provider: {
@@ -118,11 +118,11 @@ describe('ChatService.runManualAgentLoop', () => {
     vi.clearAllMocks();
 
     // Re-establish mocks after clearing
-    const { modelService } = await import('../services/model-service');
+    const { modelService } = await import('@/providers/models/model-service');
     vi.mocked(modelService.isModelAvailableSync).mockReturnValue(true);
     vi.mocked(modelService.getBestProviderForModelSync).mockReturnValue('test-provider');
 
-    const { aiProviderService } = await import('../services/ai-provider-service');
+    const { aiProviderService } = await import('@/providers/core/provider-factory');
     vi.mocked(aiProviderService.getProviderModel).mockReturnValue({
       provider: {
         apiKey: 'test-key',

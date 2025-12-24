@@ -1,8 +1,8 @@
-import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useCallback, useEffect, useRef } from 'react';
 import { logger } from '@/lib/logger';
 import { fastDirectoryTreeService } from '@/services/fast-directory-tree-service';
+import { WindowManagerService } from '@/services/window-manager-service';
 import { useGitStore } from '@/stores/git-store';
 import { useRepositoryStore } from '@/stores/repository-store';
 
@@ -58,16 +58,24 @@ export function useRepositoryWatcher() {
     }, GIT_STATUS_DEBOUNCE_DELAY);
   }, []);
 
+  // Store window label ref for cleanup
+  const windowLabelRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!rootPath) {
       return;
     }
 
-    // Start file watching
+    // Start file watching with window-specific watcher
     const startWatching = async () => {
       try {
-        await invoke('start_file_watching', { path: rootPath });
-        logger.info('File watching started for:', rootPath);
+        // Get current window label for window-specific file watching
+        const windowLabel = await WindowManagerService.getCurrentWindowLabel();
+        windowLabelRef.current = windowLabel;
+
+        // Use window-specific file watching to support multiple windows
+        await WindowManagerService.startWindowFileWatching(windowLabel, rootPath);
+        logger.info(`File watching started for window ${windowLabel} at:`, rootPath);
       } catch (error) {
         logger.error('Failed to start file watching:', error);
       }
@@ -124,7 +132,11 @@ export function useRepositoryWatcher() {
 
       unlistenFileSystem.then((fn) => fn());
       unlistenGitStatus.then((fn) => fn());
-      invoke('stop_file_watching').catch(logger.error);
+
+      // Stop window-specific file watching
+      if (windowLabelRef.current) {
+        WindowManagerService.stopWindowFileWatching(windowLabelRef.current).catch(logger.error);
+      }
     };
   }, [
     rootPath,

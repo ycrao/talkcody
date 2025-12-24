@@ -1,8 +1,8 @@
 // src/services/ai-git-messages-service.ts
 import { streamText } from 'ai';
 import { logger } from '@/lib/logger';
-import { GEMINI_25_FLASH_LITE } from '@/lib/models';
-import { aiProviderService } from './ai-provider-service';
+import { GEMINI_25_FLASH_LITE } from '@/providers/config/model-config';
+import { aiProviderService } from '@/providers/core/provider-factory';
 
 export interface GitMessageContext {
   userInput?: string;

@@ -2,7 +2,10 @@ import { Check, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { getRelativePath } from '@/services/repository-utils';
+import { useFileChangesStore } from '@/stores/file-changes-store';
 import { useRepositoryStore } from '@/stores/repository-store';
+import { EditFileResult } from './edit-file-result';
+import { WriteFileResult } from './write-file-result';
 
 interface TodoItem {
   id: string;
@@ -16,6 +19,7 @@ interface UnifiedToolResultProps {
   output?: unknown;
   isError?: boolean;
   children: React.ReactNode;
+  taskId?: string;
 }
 
 /**
@@ -94,6 +98,7 @@ export function UnifiedToolResult({
   output,
   isError: explicitError,
   children,
+  taskId,
 }: UnifiedToolResultProps) {
   const [isOpen, setIsOpen] = useState(false);
   const rootPath = useRepositoryStore((state) => state.rootPath);
@@ -125,6 +130,36 @@ export function UnifiedToolResult({
     return false;
   })();
 
+  // Render specialized content for writeFile and editFile tools
+  const renderSpecializedContent = () => {
+    // For writeFile: get content from input
+    if (toolName === 'writeFile' && input.file_path && input.content) {
+      return (
+        <WriteFileResult filePath={input.file_path as string} content={input.content as string} />
+      );
+    }
+
+    // For editFile: get diff from file-changes-store
+    if (toolName === 'editFile' && input.file_path && taskId) {
+      const changes = useFileChangesStore.getState().getChanges(taskId);
+      const fileChange = changes.find((c) => c.filePath === input.file_path);
+
+      if (fileChange?.originalContent && fileChange?.newContent) {
+        return (
+          <EditFileResult
+            filePath={input.file_path as string}
+            originalContent={fileChange.originalContent}
+            newContent={fileChange.newContent}
+          />
+        );
+      }
+    }
+
+    return null;
+  };
+
+  const specializedContent = renderSpecializedContent();
+
   return (
     <Collapsible
       open={isOpen}
@@ -152,7 +187,7 @@ export function UnifiedToolResult({
         </div>
       </CollapsibleTrigger>
       <CollapsibleContent className="border-t bg-muted/20 p-2 overflow-x-auto">
-        <div className="text-sm">{children}</div>
+        <div className="text-sm">{specializedContent || children}</div>
       </CollapsibleContent>
     </Collapsible>
   );

@@ -3,6 +3,12 @@ import type * as Monaco from 'monaco-editor';
 import { logger } from '@/lib/logger';
 import { settingsManager } from '@/stores/settings-store';
 import { findDefinition, findReferencesHybrid, getLangFamily } from './code-navigation-service';
+import {
+  getLspDefinition,
+  getLspReferences,
+  hasLspConnection,
+} from './lsp/lsp-definition-provider';
+import { uriToFilePath } from './lsp/lsp-protocol';
 
 // Languages supported by Tree-sitter backend
 const TREE_SITTER_LANGUAGES = [
@@ -50,19 +56,20 @@ function getImportPathAtPosition(
   for (const pattern of patterns) {
     // Reset pattern if it's global
     const regex = new RegExp(pattern.source, 'g');
-    let match: RegExpExecArray | null;
+    let match: RegExpExecArray | null = regex.exec(lineContent);
 
-    while ((match = regex.exec(lineContent)) !== null) {
+    while (match !== null) {
       const captured = match[1];
-      if (!captured) continue;
+      if (captured) {
+        const pathStart = match.index + match[0].indexOf(captured);
+        const pathEnd = pathStart + captured.length;
 
-      const pathStart = match.index + match[0].indexOf(captured);
-      const pathEnd = pathStart + captured.length;
-
-      // Check if cursor column is within the import path (1-indexed)
-      if (column >= pathStart + 1 && column <= pathEnd + 1) {
-        return captured;
+        // Check if cursor column is within the import path (1-indexed)
+        if (column >= pathStart + 1 && column <= pathEnd + 1) {
+          return captured;
+        }
       }
+      match = regex.exec(lineContent);
     }
   }
 
@@ -295,11 +302,67 @@ export function registerDefinitionProviders(monaco: typeof Monaco) {
         );
         if (!word) return null;
 
+        // ========================================
+        // Try LSP first (more accurate, type-aware)
+        // ========================================
+        if (hasLspConnection(currentFile)) {
+          try {
+            // LSP uses 0-indexed line/character, Monaco uses 1-indexed
+            const lspLine = position.lineNumber - 1;
+            const lspChar = position.column - 1;
+
+            logger.info(`[CodeNav] Trying LSP definition for ${currentFile}:${lspLine}:${lspChar}`);
+            const lspResult = await getLspDefinition(currentFile, lspLine, lspChar);
+
+            if (lspResult && lspResult.length > 0) {
+              // Filter out definitions at the current position
+              const filteredLspResults = lspResult.filter((loc) => {
+                const defPath = uriToFilePath(loc.uri);
+                const defLine = loc.range.start.line + 1; // Convert to 1-indexed
+                return !(defPath === currentFile && defLine === position.lineNumber);
+              });
+
+              if (filteredLspResults.length > 0) {
+                // Cache the result for Cmd+Click handler
+                lastDefinitionResult = {
+                  word: word.word,
+                  position: { lineNumber: position.lineNumber, column: position.column },
+                  definitions: filteredLspResults.map((loc) => ({
+                    file_path: uriToFilePath(loc.uri),
+                    start_line: loc.range.start.line + 1,
+                    start_column: loc.range.start.character + 1,
+                  })),
+                  timestamp: Date.now(),
+                };
+
+                const result = filteredLspResults.map((loc) => ({
+                  uri: monaco.Uri.file(uriToFilePath(loc.uri)),
+                  range: new monaco.Range(
+                    loc.range.start.line + 1,
+                    loc.range.start.character + 1,
+                    loc.range.end.line + 1,
+                    loc.range.end.character + 1
+                  ),
+                }));
+
+                logger.info('[CodeNav] LSP returned definition locations:', result.length);
+                return result;
+              }
+            }
+            logger.info('[CodeNav] LSP returned no results, falling back to Tree-sitter');
+          } catch (error) {
+            logger.warn('[CodeNav] LSP definition failed, falling back to Tree-sitter:', error);
+          }
+        }
+
+        // ========================================
+        // Fallback to Tree-sitter
+        // ========================================
         try {
           const langFamily = getLangFamily(modelLangId);
           const definitions = await findDefinition(word.word, langFamily);
           logger.info(
-            '[CodeNav] findDefinition returned:',
+            '[CodeNav] findDefinition (Tree-sitter) returned:',
             definitions.length,
             'results for',
             word.word,
@@ -354,10 +417,46 @@ export function registerDefinitionProviders(monaco: typeof Monaco) {
       provideReferences: async (model, position, _context) => {
         const word = model.getWordAtPosition(position);
         const modelLangId = model.getLanguageId();
+        const currentFile = model.uri.path;
         logger.info('[CodeNav] provideReferences called for:', word?.word);
 
         if (!word) return [];
 
+        // ========================================
+        // Try LSP first (more accurate, type-aware)
+        // ========================================
+        if (hasLspConnection(currentFile)) {
+          try {
+            // LSP uses 0-indexed line/character, Monaco uses 1-indexed
+            const lspLine = position.lineNumber - 1;
+            const lspChar = position.column - 1;
+
+            logger.info(`[CodeNav] Trying LSP references for ${currentFile}:${lspLine}:${lspChar}`);
+            const lspResult = await getLspReferences(currentFile, lspLine, lspChar);
+
+            if (lspResult && lspResult.length > 0) {
+              const result = lspResult.map((loc) => ({
+                uri: monaco.Uri.file(uriToFilePath(loc.uri)),
+                range: new monaco.Range(
+                  loc.range.start.line + 1,
+                  loc.range.start.character + 1,
+                  loc.range.end.line + 1,
+                  loc.range.end.character + 1
+                ),
+              }));
+
+              logger.info('[CodeNav] LSP returned references:', result.length);
+              return result;
+            }
+            logger.info('[CodeNav] LSP returned no references, falling back to Tree-sitter');
+          } catch (error) {
+            logger.warn('[CodeNav] LSP references failed, falling back to Tree-sitter:', error);
+          }
+        }
+
+        // ========================================
+        // Fallback to Tree-sitter + ripgrep hybrid
+        // ========================================
         try {
           const langFamily = getLangFamily(modelLangId);
           const rootPath = settingsManager.getCurrentRootPath();
@@ -370,7 +469,7 @@ export function registerDefinitionProviders(monaco: typeof Monaco) {
           // Use hybrid search: ripgrep text search + tree-sitter filtering
           const references = await findReferencesHybrid(word.word, langFamily, rootPath);
           logger.info(
-            '[CodeNav] findReferencesHybrid returned:',
+            '[CodeNav] findReferencesHybrid (Tree-sitter) returned:',
             references.length,
             'results for',
             word.word,

@@ -4,11 +4,11 @@ import type { AgentDefinition } from '@/types/agent';
 import { settingsManager } from '@/stores/settings-store';
 import { agentRegistry } from './agents/agent-registry';
 import { logger } from '@/lib/logger';
-import { modelService } from './model-service';
+import { modelService } from '@/providers/models/model-service';
 
 // Mock dependencies
-vi.mock('@/lib/models', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/models')>();
+vi.mock('@/providers/config/model-config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/providers/config/model-config')>();
   return {
     ...actual,
   };
@@ -18,6 +18,7 @@ vi.mock('@/stores/settings-store', () => ({
   settingsManager: {
     getAgentId: vi.fn().mockResolvedValue('coding'),
     get: vi.fn(),
+    getApiKeys: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -32,6 +33,7 @@ vi.mock('@/lib/logger', () => ({
     warn: vi.fn(),
     error: vi.fn(),
     info: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -41,7 +43,7 @@ vi.mock('./model-sync-service', () => ({
   },
 }));
 
-vi.mock('./model-type-service', () => ({
+vi.mock('@/providers/models/model-type-service', () => ({
   modelTypeService: {
     resolveModelType: vi.fn(),
   },
@@ -53,7 +55,7 @@ describe('ModelService - getCurrentModel', () => {
   });
 
   it('should use modelTypeService.resolveModelType to get the model', async () => {
-    const { modelTypeService } = await import('./model-type-service');
+    const { modelTypeService } = await import('@/providers/models/model-type-service');
 
     const mockAgent: AgentDefinition = {
       id: 'coding',
@@ -76,7 +78,7 @@ describe('ModelService - getCurrentModel', () => {
   });
 
   it('should fallback to planner agent if specified agent not found', async () => {
-    const { modelTypeService } = await import('./model-type-service');
+    const { modelTypeService } = await import('@/providers/models/model-type-service');
 
     const mockAgent: AgentDefinition = {
       id: 'planner',
@@ -133,7 +135,7 @@ describe('ModelService - getCurrentModel', () => {
   // BUG FIX TEST: This test verifies the fix for the "No available provider for model" issue
   // where new users with empty model settings get the default model instead of empty string
   it('should return default model when settings are empty (bug fix for new users)', async () => {
-    const { modelTypeService } = await import('./model-type-service');
+    const { modelTypeService } = await import('@/providers/models/model-type-service');
 
     const mockAgent: AgentDefinition = {
       id: 'coding',
@@ -157,7 +159,7 @@ describe('ModelService - getCurrentModel', () => {
 
   // Additional test to ensure resolveModelType is called for all model types
   it('should use resolveModelType for different model types', async () => {
-    const { modelTypeService } = await import('./model-type-service');
+    const { modelTypeService } = await import('@/providers/models/model-type-service');
 
     const testCases = [
       { modelType: ModelType.MAIN, expectedModel: 'glm-4.6@aiGateway' },

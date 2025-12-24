@@ -422,22 +422,6 @@ export class TursoSchema {
           Z_AI_MODE: 'ZHIPU',
         },
       },
-      {
-        id: 'glm-coding-plan-search',
-        name: 'GLM Coding Plan Search',
-        url: 'https://open.bigmodel.cn/api/mcp/web_search_prime/mcp',
-        protocol: 'http',
-        stdio_command: null,
-        stdio_args: null,
-      },
-      {
-        id: 'glm-coding-plan-reader',
-        name: 'GLM Coding Plan Reader',
-        url: 'https://open.bigmodel.cn/api/mcp/web_reader/mcp',
-        protocol: 'http',
-        stdio_command: null,
-        stdio_args: null,
-      },
     ];
 
     for (const server of builtInServers) {

@@ -1,9 +1,11 @@
+// src/providers/custom/custom-model-service.ts
+
 import { invoke } from '@tauri-apps/api/core';
 import { BaseDirectory, exists, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { logger } from '@/lib/logger';
 import type { ProxyRequest, ProxyResponse } from '@/lib/tauri-fetch';
-import { PROVIDER_CONFIGS, type ProviderIds } from '@/providers/provider_config';
-import { customProviderService } from '@/services/custom-provider-service';
+import { PROVIDER_CONFIGS, type ProviderIds } from '@/providers/config/provider-config';
+import { customProviderService } from '@/providers/custom/custom-provider-service';
 import { settingsManager } from '@/stores/settings-store';
 import type { ModelConfig, ModelsConfiguration } from '@/types/models';
 

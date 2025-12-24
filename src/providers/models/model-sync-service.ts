@@ -1,8 +1,8 @@
 import { getApiUrl } from '@/lib/config';
 import { logger } from '@/lib/logger';
-import { modelLoader } from '@/lib/model-loader';
-import { refreshModelConfigs } from '@/lib/models';
 import { simpleFetch } from '@/lib/tauri-fetch';
+import { refreshModelConfigs } from '@/providers/config/model-config';
+import { modelLoader } from '@/providers/models/model-loader';
 import type { ModelsConfiguration, ModelVersionResponse } from '@/types/models';
 
 const VERSION_ENDPOINT = '/api/models/version';

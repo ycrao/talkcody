@@ -67,9 +67,13 @@ export class DependencyAnalyzer {
       return await this.agentAnalyzer.analyzeDependencies(agentCalls, tools);
     }
 
-    // Mixed calls - validate and reject
+    // Mixed calls - use ToolDependencyAnalyzer
+    // callAgent is a registered tool with targets support, so it can be handled like any other tool
     if (agentCalls.length > 0 && otherTools.length > 0) {
-      this.validateNoMixedAgentCalls(agentCalls, otherTools);
+      logger.info('Mixed agent and tool calls, using ToolDependencyAnalyzer', {
+        agentCount: agentCalls.length,
+        otherToolCount: otherTools.length,
+      });
     }
 
     // Pure tool calls - use ToolDependencyAnalyzer
@@ -104,30 +108,5 @@ export class DependencyAnalyzer {
     }
 
     return { agentCalls, otherTools };
-  }
-
-  /**
-   * Validate that agent calls are not mixed with other tools
-   * This enforces context isolation and prevents tool conflicts
-   */
-  private validateNoMixedAgentCalls(agentCalls: ToolCallInfo[], otherTools: ToolCallInfo[]): void {
-    const errorMessage = `Context isolation violation: Agent calls cannot be mixed with other tools in the same response.
-
-Found mixed calls:
-- Agent calls: ${agentCalls.map((c) => c.toolName).join(', ')}
-- Other tools: ${otherTools.map((c) => c.toolName).join(', ')}
-
-Solution: Use separate responses for:
-1. Information gathering (readFile, grepSearch, etc.)
-2. Agent delegation (callAgent)
-
-This ensures clean context boundaries and prevents tool conflicts.`;
-
-    logger.error('Mixed agent and tool calls detected', {
-      agentCalls: agentCalls.map((c) => ({ name: c.toolName, id: c.toolCallId })),
-      otherCalls: otherTools.map((c) => ({ name: c.toolName, id: c.toolCallId })),
-    });
-
-    throw new Error(errorMessage);
   }
 }

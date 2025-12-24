@@ -27,7 +27,7 @@ vi.mock('@/hooks/use-toolbar-state', () => ({
 
 // Mock model service
 const mockGetCurrentModel = vi.fn();
-vi.mock('@/services/model-service', () => ({
+vi.mock('@/providers/models/model-service', () => ({
   modelService: {
     getCurrentModel: () => mockGetCurrentModel(),
   },

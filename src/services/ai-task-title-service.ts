@@ -1,10 +1,10 @@
 // src/services/ai-task-title-service.ts
 import { streamText } from 'ai';
 import { logger } from '@/lib/logger';
+import { aiProviderService } from '@/providers/core/provider-factory';
+import { modelTypeService } from '@/providers/models/model-type-service';
 import { settingsManager } from '@/stores/settings-store';
 import { ModelType } from '@/types/model-types';
-import { aiProviderService } from './ai-provider-service';
-import { modelTypeService } from './model-type-service';
 
 export interface TitleGenerationResult {
   title: string;

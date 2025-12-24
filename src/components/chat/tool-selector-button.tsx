@@ -13,7 +13,7 @@ import { useAppSettings } from '@/hooks/use-settings';
 import { getDocLinks } from '@/lib/doc-links';
 import { logger } from '@/lib/logger';
 import { isToolAllowedForAgent } from '@/services/agents/agent-tool-access';
-import { getAvailableToolsForUISync } from '@/services/agents/tool-registry';
+import { areToolsLoaded, getAvailableToolsForUISync } from '@/services/agents/tool-registry';
 import { useAgentStore } from '@/stores/agent-store';
 import { useToolOverrideStore } from '@/stores/tool-override-store';
 
@@ -34,15 +34,12 @@ export function ToolSelectorButton() {
 
   // Wait for tools to be loaded before accessing them
   useEffect(() => {
-    const checkToolsLoaded = async () => {
-      try {
-        // Try to access tools, will throw if not loaded
-        getAvailableToolsForUISync();
+    const checkToolsLoaded = () => {
+      if (areToolsLoaded()) {
         setToolsLoaded(true);
-      } catch {
+      } else {
         // Tools not loaded yet, wait a bit and retry
-        const timer = setTimeout(checkToolsLoaded, 100);
-        return () => clearTimeout(timer);
+        setTimeout(checkToolsLoaded, 100);
       }
     };
 
@@ -52,7 +49,8 @@ export function ToolSelectorButton() {
   // Get all available built-in tools (excluding hidden tools)
   // Return empty array if tools aren't loaded yet to prevent crash
   const builtInTools = useMemo(() => {
-    if (!toolsLoaded) return [];
+    // Check both local state and actual cache state (cache can be reset during HMR)
+    if (!toolsLoaded || !areToolsLoaded()) return [];
     try {
       const allTools = getAvailableToolsForUISync();
       // Filter out hidden tools

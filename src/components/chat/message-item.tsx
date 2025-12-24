@@ -120,7 +120,12 @@ function MessageItemComponent({
                 )}
               </div>
             ) : (
-              <UnifiedToolResult toolName={item.toolName} input={unifiedInput} output={item.output}>
+              <UnifiedToolResult
+                toolName={item.toolName}
+                input={unifiedInput}
+                output={item.output}
+                taskId={message.taskId}
+              >
                 {item.output ? (
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     <pre className="overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words max-h-60">
@@ -225,7 +230,12 @@ function MessageItemComponent({
 
           return (
             <ToolErrorBoundary key={uniqueKey} toolName={item.toolName}>
-              <UnifiedToolResult toolName={item.toolName} input={input} output={item.output}>
+              <UnifiedToolResult
+                toolName={item.toolName}
+                input={input}
+                output={item.output}
+                taskId={message.taskId}
+              >
                 {resultComponent}
               </UnifiedToolResult>
             </ToolErrorBoundary>

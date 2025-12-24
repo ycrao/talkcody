@@ -13,7 +13,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/models', () => ({
+vi.mock('@/providers/config/model-config', () => ({
   MODEL_CONFIGS: {
     'model-a': {
       name: 'Model A',
@@ -47,11 +47,11 @@ vi.mock('@/lib/models', () => ({
   }),
 }));
 
-vi.mock('@/providers/custom-provider-factory', () => ({
+vi.mock('@/providers/custom/custom-provider-factory', () => ({
   createCustomProvider: vi.fn(),
 }));
 
-vi.mock('@/providers/provider_config', () => ({
+vi.mock('@/providers/config/provider-config', () => ({
   PROVIDER_CONFIGS: {
     openai: { name: 'OpenAI' },
     anthropic: { name: 'Anthropic' },
@@ -60,7 +60,7 @@ vi.mock('@/providers/provider_config', () => ({
   },
 }));
 
-vi.mock('@/services/custom-model-service', () => ({
+vi.mock('@/providers/custom/custom-model-service', () => ({
   isLocalProvider: vi.fn((providerId: string) => providerId === 'ollama' || providerId === 'lmstudio'),
 }));
 
@@ -70,7 +70,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should not duplicate models that exist in both built-in and custom models', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = { ollama: 'enabled' };
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -95,7 +95,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should allow same model with different providers', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = { openai: 'sk-xxx', openrouter: 'sk-or-xxx' };
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -111,7 +111,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should prioritize built-in model config over custom (built-in added first)', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = { ollama: 'enabled' };
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -137,7 +137,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should handle empty customModels', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = { openai: 'sk-xxx' };
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -152,7 +152,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should handle empty apiKeys (no available models)', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = {};
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -166,7 +166,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should add custom-only models that do not exist in built-in', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = { openai: 'sk-xxx' };
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -191,7 +191,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should sort models by name', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = { openai: 'sk-xxx', anthropic: 'sk-ant-xxx' };
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -207,7 +207,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should handle multiple duplicate entries from custom models', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = { ollama: 'enabled' };
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -234,7 +234,7 @@ describe('provider-utils: computeAvailableModels', () => {
   });
 
   it('should include custom provider models when custom provider is enabled', async () => {
-    const { computeAvailableModels } = await import('./provider-utils');
+    const { computeAvailableModels } = await import('@/providers/core/provider-utils');
 
     const apiKeys = {};
     const providerConfigs = new Map<string, ProviderDefinition>();
@@ -268,28 +268,28 @@ describe('provider-utils: computeAvailableModels', () => {
 
 describe('provider-utils: parseModelIdentifier', () => {
   it('should parse model identifier with provider', async () => {
-    const { parseModelIdentifier } = await import('./provider-utils');
+    const { parseModelIdentifier } = await import('@/providers/core/provider-utils');
 
     const result = parseModelIdentifier('gpt-4@openai');
     expect(result).toEqual({ modelKey: 'gpt-4', providerId: 'openai' });
   });
 
   it('should parse model identifier without provider', async () => {
-    const { parseModelIdentifier } = await import('./provider-utils');
+    const { parseModelIdentifier } = await import('@/providers/core/provider-utils');
 
     const result = parseModelIdentifier('gpt-4');
     expect(result).toEqual({ modelKey: 'gpt-4', providerId: null });
   });
 
   it('should handle empty string', async () => {
-    const { parseModelIdentifier } = await import('./provider-utils');
+    const { parseModelIdentifier } = await import('@/providers/core/provider-utils');
 
     const result = parseModelIdentifier('');
     expect(result).toEqual({ modelKey: '', providerId: null });
   });
 
   it('should handle multiple @ symbols (only split on first)', async () => {
-    const { parseModelIdentifier } = await import('./provider-utils');
+    const { parseModelIdentifier } = await import('@/providers/core/provider-utils');
 
     // Current implementation splits on all @, so "a@b@c" becomes ["a", "b", "c"]
     // which has length 3, not 2, so it falls back to returning the whole string
@@ -300,33 +300,33 @@ describe('provider-utils: parseModelIdentifier', () => {
 
 describe('provider-utils: hasApiKeyForProvider', () => {
   it('should return true for local provider with enabled status', async () => {
-    const { hasApiKeyForProvider } = await import('./provider-utils');
+    const { hasApiKeyForProvider } = await import('@/providers/core/provider-utils');
 
     expect(hasApiKeyForProvider('ollama', { ollama: 'enabled' })).toBe(true);
   });
 
   it('should return false for local provider without enabled status', async () => {
-    const { hasApiKeyForProvider } = await import('./provider-utils');
+    const { hasApiKeyForProvider } = await import('@/providers/core/provider-utils');
 
     expect(hasApiKeyForProvider('ollama', {})).toBe(false);
     expect(hasApiKeyForProvider('ollama', { ollama: '' })).toBe(false);
   });
 
   it('should return true for provider with valid API key', async () => {
-    const { hasApiKeyForProvider } = await import('./provider-utils');
+    const { hasApiKeyForProvider } = await import('@/providers/core/provider-utils');
 
     expect(hasApiKeyForProvider('openai', { openai: 'sk-xxx' })).toBe(true);
   });
 
   it('should return false for provider with empty API key', async () => {
-    const { hasApiKeyForProvider } = await import('./provider-utils');
+    const { hasApiKeyForProvider } = await import('@/providers/core/provider-utils');
 
     expect(hasApiKeyForProvider('openai', { openai: '' })).toBe(false);
     expect(hasApiKeyForProvider('openai', { openai: '   ' })).toBe(false);
   });
 
   it('should always return true for talkcody provider', async () => {
-    const { hasApiKeyForProvider } = await import('./provider-utils');
+    const { hasApiKeyForProvider } = await import('@/providers/core/provider-utils');
 
     expect(hasApiKeyForProvider('talkcody', {})).toBe(true);
   });

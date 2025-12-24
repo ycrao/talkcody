@@ -13,7 +13,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   writeTextFile: vi.fn(),
 }));
 
-vi.mock('@/services/custom-provider-service', () => ({
+vi.mock('@/providers/custom/custom-provider-service', () => ({
   customProviderService: {
     getEnabledCustomProviders: vi.fn().mockResolvedValue([]),
   },
@@ -34,7 +34,7 @@ vi.mock('@/stores/settings-store', () => ({
   },
 }));
 
-vi.mock('@/providers/provider_config', () => ({
+vi.mock('@/providers/config/provider-config', () => ({
   PROVIDER_CONFIGS: {
     anthropic: { name: 'Anthropic' },
     openai: { name: 'OpenAI' },
@@ -49,7 +49,7 @@ describe('CustomModelService - fetchProviderModels with custom base URL', () => 
   it('should use custom base URL when configured for anthropic', async () => {
     const { invoke } = await import('@tauri-apps/api/core');
     const { settingsManager } = await import('@/stores/settings-store');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup mocks
     vi.mocked(settingsManager.getProviderApiKey).mockReturnValue('test-api-key');
@@ -73,7 +73,7 @@ describe('CustomModelService - fetchProviderModels with custom base URL', () => 
   it('should use custom base URL when configured for openai', async () => {
     const { invoke } = await import('@tauri-apps/api/core');
     const { settingsManager } = await import('@/stores/settings-store');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     vi.mocked(settingsManager.getProviderApiKey).mockReturnValue('test-api-key');
     vi.mocked(settingsManager.getProviderBaseUrl).mockResolvedValue('https://my-openai-proxy.com/v1/');
@@ -96,7 +96,7 @@ describe('CustomModelService - fetchProviderModels with custom base URL', () => 
   it('should use default endpoint when no custom base URL is configured', async () => {
     const { invoke } = await import('@tauri-apps/api/core');
     const { settingsManager } = await import('@/stores/settings-store');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     vi.mocked(settingsManager.getProviderApiKey).mockReturnValue('test-api-key');
     vi.mocked(settingsManager.getProviderBaseUrl).mockResolvedValue(null);
@@ -119,7 +119,7 @@ describe('CustomModelService - fetchProviderModels with custom base URL', () => 
   it('should handle multiple trailing slashes in custom base URL', async () => {
     const { invoke } = await import('@tauri-apps/api/core');
     const { settingsManager } = await import('@/stores/settings-store');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     vi.mocked(settingsManager.getProviderApiKey).mockReturnValue('test-api-key');
     vi.mocked(settingsManager.getProviderBaseUrl).mockResolvedValue('https://proxy.com/v1///');
@@ -140,7 +140,7 @@ describe('CustomModelService - fetchProviderModels with custom base URL', () => 
   it('should include anthropic-specific headers with custom base URL', async () => {
     const { invoke } = await import('@tauri-apps/api/core');
     const { settingsManager } = await import('@/stores/settings-store');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     vi.mocked(settingsManager.getProviderApiKey).mockReturnValue('my-api-key');
     vi.mocked(settingsManager.getProviderBaseUrl).mockResolvedValue('https://custom-anthropic.com/v1');
@@ -170,7 +170,7 @@ describe('CustomModelService - addCustomModel provider merging', () => {
 
   it('should merge providers when adding a model with same ID via addCustomModel', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: existing model with provider A
     const existingConfig = {
@@ -210,7 +210,7 @@ describe('CustomModelService - addCustomModel provider merging', () => {
 
   it('should merge providers when adding a model with same ID via addCustomModels', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: existing model with provider A
     const existingConfig = {
@@ -252,7 +252,7 @@ describe('CustomModelService - addCustomModel provider merging', () => {
 
   it('should merge providerMappings when adding a model with same ID', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: existing model with provider A and its mapping
     const existingConfig = {
@@ -298,7 +298,7 @@ describe('CustomModelService - addCustomModel provider merging', () => {
 
   it('should not duplicate providers when adding same provider twice', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: existing model with provider A
     const existingConfig = {
@@ -338,7 +338,7 @@ describe('CustomModelService - addCustomModel provider merging', () => {
 
   it('should create new model when model ID does not exist', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: empty config
     const existingConfig = {
@@ -372,7 +372,7 @@ describe('CustomModelService - addCustomModel provider merging', () => {
 
   it('should handle merging multiple models at once with addCustomModels', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: existing models
     const existingConfig = {
@@ -436,7 +436,7 @@ describe('CustomModelService - cache invalidation after write operations', () =>
 
   it('should clear cache after addCustomModel so next read gets fresh data', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: initial config
     const initialConfig = {
@@ -479,7 +479,7 @@ describe('CustomModelService - cache invalidation after write operations', () =>
 
   it('should clear cache after addCustomModels so next read gets fresh data', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: initial config
     const initialConfig = {
@@ -514,7 +514,7 @@ describe('CustomModelService - cache invalidation after write operations', () =>
 
   it('should clear cache after removeCustomModel so next read gets fresh data', async () => {
     const { exists, readTextFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
-    const { customModelService } = await import('./custom-model-service');
+    const { customModelService } = await import('@/providers/custom/custom-model-service');
 
     // Setup: config with a model
     const initialConfig = {

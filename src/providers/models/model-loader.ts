@@ -1,7 +1,7 @@
 import modelsDefault from '@talkcody/shared/data/models-config.json';
 import { BaseDirectory, exists, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { logger } from '@/lib/logger';
-import { customModelService } from '@/services/custom-model-service';
+import { customModelService } from '@/providers/custom/custom-model-service';
 import type { ModelsConfiguration } from '@/types/models';
 
 const MODELS_CACHE_FILENAME = 'models-cache.json';

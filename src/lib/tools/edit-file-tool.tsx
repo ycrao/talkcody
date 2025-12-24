@@ -15,7 +15,6 @@ import {
   useEditReviewStore,
 } from '@/stores/edit-review-store';
 import { useFileChangesStore } from '@/stores/file-changes-store';
-import { settingsManager } from '@/stores/settings-store';
 import type { TaskSettings } from '@/types';
 import {
   findSimilarText,

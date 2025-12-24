@@ -258,6 +258,14 @@ let toolsCache: Record<string, ToolWithUI> | null = null;
 let loadingPromise: Promise<Record<string, ToolWithUI>> | null = null;
 
 /**
+ * Check if tools have been loaded (without throwing)
+ * Useful for components that need to check before accessing tools
+ */
+export function areToolsLoaded(): boolean {
+  return toolsCache !== null;
+}
+
+/**
  * Load all tools from the registry
  * Tools are cached after first load
  */

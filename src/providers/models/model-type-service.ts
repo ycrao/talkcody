@@ -3,13 +3,13 @@
  */
 
 import { logger } from '@/lib/logger';
+import { modelService } from '@/providers/models/model-service';
 import { settingsManager } from '@/stores/settings-store';
 import {
   DEFAULT_MODELS_BY_TYPE,
   MODEL_TYPE_SETTINGS_KEYS,
   type ModelType,
 } from '@/types/model-types';
-import { modelService } from './model-service';
 
 export class ModelTypeService {
   /**

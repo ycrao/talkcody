@@ -2,7 +2,7 @@ import { safeValidateTypes } from '@ai-sdk/provider-utils';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { parseModelIdentifier } from '@/lib/provider-utils';
+import { parseModelIdentifier } from '@/providers/core/provider-utils';
 import type { ConvertMessagesOptions, ToolMessageContent, UIMessage } from '@/types/agent';
 
 const MAX_LINES = 2000;
@@ -160,6 +160,16 @@ export async function convertMessages(
 
   // Only add system message if systemPrompt is provided
   if (options.systemPrompt) {
+    logger.info('options.providerId:', { providerId: options.providerId });
+
+    // Add Claude Code identity prefix for Anthropic provider
+    if (options.providerId === 'anthropic') {
+      convertedMessages.push({
+        role: 'system' as const,
+        content: `You are Claude Code, Anthropic's official CLI for Claude.`,
+      });
+    }
+
     convertedMessages.push({
       role: 'system' as const,
       content: options.systemPrompt,

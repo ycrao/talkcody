@@ -2,6 +2,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getCurrent as getCurrentDeepLinkUrls, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { InitializationScreen } from '@/components/initialization-screen';
+import { LspDownloadPrompt } from '@/components/lsp-download-prompt';
 import { MainContent } from '@/components/main-content';
 import { NavigationSidebar } from '@/components/navigation-sidebar';
 import { OnboardingWizard } from '@/components/onboarding';
@@ -304,6 +305,9 @@ function AppContent() {
 
       {/* What's New Dialog - shown after app update */}
       <WhatsNewDialog />
+
+      {/* LSP Server Download Prompt */}
+      <LspDownloadPrompt />
     </div>
   );
 }

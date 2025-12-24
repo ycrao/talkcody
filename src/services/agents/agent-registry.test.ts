@@ -13,6 +13,7 @@ vi.mock('../database/agent-service', () => ({
     createAgent: vi.fn().mockResolvedValue(undefined),
     updateAgent: vi.fn().mockResolvedValue(undefined),
     incrementUsageCount: vi.fn().mockResolvedValue(undefined),
+    listAgents: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -28,7 +29,7 @@ vi.mock('@/stores/settings-store', () => ({
   },
 }));
 
-vi.mock('../model-type-service', () => ({
+vi.mock('@/providers/models/model-type-service', () => ({
   modelTypeService: {
     resolveModelType: vi.fn().mockResolvedValue('gpt-4@openai'),
   },

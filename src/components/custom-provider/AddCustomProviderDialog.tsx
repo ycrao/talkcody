@@ -28,8 +28,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useTranslation } from '@/hooks/use-locale';
 import { logger } from '@/lib/logger';
-import { customModelService, type FetchedModel } from '@/services/custom-model-service';
-import { customProviderService } from '@/services/custom-provider-service';
+import { customModelService, type FetchedModel } from '@/providers/custom/custom-model-service';
+import { customProviderService } from '@/providers/custom/custom-provider-service';
 import { useProviderStore } from '@/stores/provider-store';
 import type {
   CustomProviderConfig,

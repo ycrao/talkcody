@@ -51,6 +51,7 @@ function generateContent(lineCount: number): string {
 }
 
 // Helper to create a readFile tool-result message
+// Uses type: 'text' with JSON.stringify to match llm-service.ts behavior
 function createReadFileResult(
   toolCallId: string,
   filePath: string,
@@ -65,13 +66,17 @@ function createReadFileResult(
         toolCallId,
         toolName: 'readFile',
         output: {
-          type: 'json',
-          value: {
-            success,
-            file_path: filePath,
-            content,
-            message: `Read ${filePath}`,
-          },
+          type: 'text',
+          value: JSON.stringify(
+            {
+              success,
+              file_path: filePath,
+              content,
+              message: `Read ${filePath}`,
+            },
+            null,
+            2
+          ),
         },
       } as ToolResultPart,
     ],
@@ -189,9 +194,10 @@ describe('MessageRewriter', () => {
       // Verify the content was replaced
       const toolResult = result[0] as ModelMessage & { role: 'tool' };
       const part = toolResult.content[0] as ToolResultPart;
-      const output = part.output as { type: 'json'; value: Record<string, unknown> };
-      expect(output.value.content).toBe(summarizedContent);
-      expect(output.value.message).toContain('[COMPRESSED: 150 lines → summarized]');
+      const output = part.output as { type: 'text'; value: string };
+      const parsedOutput = JSON.parse(output.value);
+      expect(parsedOutput.content).toBe(summarizedContent);
+      expect(parsedOutput.message).toContain('[COMPRESSED: 150 lines → summarized]');
     });
 
     it('should summarize Python files over LINE_THRESHOLD', async () => {
@@ -219,8 +225,9 @@ describe('MessageRewriter', () => {
 
       const toolResult = result[0] as ModelMessage & { role: 'tool' };
       const part = toolResult.content[0] as ToolResultPart;
-      const output = part.output as { type: 'json'; value: Record<string, unknown> };
-      expect(output.value.content).toBe(summarizedContent);
+      const output = part.output as { type: 'text'; value: string };
+      const parsed = JSON.parse(output.value);
+      expect(parsed.content).toBe(summarizedContent);
     });
 
     it('should not summarize unsupported file types (md)', async () => {
@@ -287,13 +294,13 @@ describe('MessageRewriter', () => {
               toolCallId: 'call-1',
               toolName: 'readFile',
               output: {
-                type: 'json',
-                value: {
+                type: 'text',
+                value: JSON.stringify({
                   success: true,
                   content: generateContent(150),
                   message: 'Read file',
                   // Missing file_path
-                },
+                }),
               },
             } as ToolResultPart,
           ],
@@ -348,13 +355,13 @@ describe('MessageRewriter', () => {
               toolCallId: 'call-1',
               toolName: 'readFile',
               output: {
-                type: 'json',
-                value: {
+                type: 'text',
+                value: JSON.stringify({
                   success: true,
                   file_path: '/src/large1.ts',
                   content: largeContent1,
                   message: 'Read file',
-                },
+                }),
               },
             } as ToolResultPart,
             {
@@ -362,13 +369,13 @@ describe('MessageRewriter', () => {
               toolCallId: 'call-2',
               toolName: 'readFile',
               output: {
-                type: 'json',
-                value: {
+                type: 'text',
+                value: JSON.stringify({
                   success: true,
                   file_path: '/src/large2.ts',
                   content: largeContent2,
                   message: 'Read file',
-                },
+                }),
               },
             } as ToolResultPart,
             {
@@ -376,13 +383,13 @@ describe('MessageRewriter', () => {
               toolCallId: 'call-3',
               toolName: 'readFile',
               output: {
-                type: 'json',
-                value: {
+                type: 'text',
+                value: JSON.stringify({
                   success: true,
                   file_path: '/src/small.ts',
                   content: smallContent,
                   message: 'Read file',
-                },
+                }),
               },
             } as ToolResultPart,
           ],
@@ -397,15 +404,18 @@ describe('MessageRewriter', () => {
       const parts = toolMessage.content as ToolResultPart[];
 
       // First two should be summarized
-      const output1 = parts[0].output as { type: 'json'; value: Record<string, unknown> };
-      expect(output1.value.content).toBe('// Summary 1');
+      const output1 = parts[0].output as { type: 'text'; value: string };
+      const parsed1 = JSON.parse(output1.value);
+      expect(parsed1.content).toBe('// Summary 1');
 
-      const output2 = parts[1].output as { type: 'json'; value: Record<string, unknown> };
-      expect(output2.value.content).toBe('// Summary 2');
+      const output2 = parts[1].output as { type: 'text'; value: string };
+      const parsed2 = JSON.parse(output2.value);
+      expect(parsed2.content).toBe('// Summary 2');
 
       // Third should be unchanged (small file)
-      const output3 = parts[2].output as { type: 'json'; value: Record<string, unknown> };
-      expect(output3.value.content).toBe(smallContent);
+      const output3 = parts[2].output as { type: 'text'; value: string };
+      const parsed3 = JSON.parse(output3.value);
+      expect(parsed3.content).toBe(smallContent);
     });
   });
 
@@ -610,8 +620,9 @@ describe('MessageRewriter', () => {
       // Read result summarized
       const toolResult = result[1] as ModelMessage & { role: 'tool' };
       const readPart = toolResult.content[0] as ToolResultPart;
-      const readOutput = readPart.output as { type: 'json'; value: Record<string, unknown> };
-      expect(readOutput.value.content).toBe('// Read summary');
+      const readOutput = readPart.output as { type: 'text'; value: string };
+      const parsedReadOutput = JSON.parse(readOutput.value);
+      expect(parsedReadOutput.content).toBe('// Read summary');
 
       // Write call summarized
       const assistantMsg = result[2] as ModelMessage & { role: 'assistant' };
@@ -722,8 +733,9 @@ describe('MessageRewriter', () => {
 
         const toolResult = result[0] as ModelMessage & { role: 'tool' };
         const part = toolResult.content[0] as ToolResultPart;
-        const output = part.output as { type: 'json'; value: Record<string, unknown> };
-        expect(output.value.content).toBe(`// ${ext} summary`);
+        const output = part.output as { type: 'text'; value: string };
+        const parsed = JSON.parse(output.value);
+        expect(parsed.content).toBe(`// ${ext} summary`);
       });
     }
 

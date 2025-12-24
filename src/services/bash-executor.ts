@@ -15,6 +15,15 @@ interface TauriShellResult {
   pid: number | null;
 }
 
+// Result from Rust backend search_files_by_glob command
+interface GlobResult {
+  path: string;
+  /** Canonical (resolved) path - resolves symlinks to their real location */
+  canonical_path: string;
+  is_directory: boolean;
+  modified_time: number;
+}
+
 export interface BashResult {
   success: boolean;
   message: string;
@@ -36,9 +45,11 @@ export interface BashResult {
 // 1. Workspace root exists
 // 2. Directory is inside a Git repository
 // 3. All target paths are within workspace
+// Note: rm with wildcards is now handled by validateWildcardRmCommand() which:
+// 1. Expands wildcards using Rust backend glob
+// 2. Validates all expanded paths are within workspace
 const DANGEROUS_PATTERNS = [
   // File system destruction - rm patterns that are always dangerous
-  /\brm\s+.*\*/, // rm with wildcards
   /\brm\b.*\s\.(?:\/)?(?:\s|$)/, // rm . or rm -rf . (current directory)
   /rmdir\s+.*-.*r/, // rmdir with recursive
 
@@ -293,6 +304,165 @@ export class BashExecutor {
   }
 
   /**
+   * Extract wildcard patterns from rm command arguments
+   * Separates wildcards from explicit paths and flags
+   */
+  private extractWildcardPatterns(command: string): {
+    wildcardPaths: string[];
+    explicitPaths: string[];
+    flags: string[];
+    hasWildcards: boolean;
+  } {
+    const rmMatch = command.match(/\brm\s+(.+)/);
+    if (!rmMatch) {
+      return { wildcardPaths: [], explicitPaths: [], flags: [], hasWildcards: false };
+    }
+
+    const args = rmMatch[1] ?? '';
+    const parts = args.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+
+    const wildcardPaths: string[] = [];
+    const explicitPaths: string[] = [];
+    const flags: string[] = [];
+
+    for (const part of parts) {
+      if (part.startsWith('-')) {
+        flags.push(part);
+        continue;
+      }
+
+      const cleanPath = part.replace(/^["']|["']$/g, '');
+      if (!cleanPath) continue;
+
+      // Check for wildcard characters: *, ?, [, {
+      if (/[*?[{]/.test(cleanPath)) {
+        wildcardPaths.push(cleanPath);
+      } else {
+        explicitPaths.push(cleanPath);
+      }
+    }
+
+    return {
+      wildcardPaths,
+      explicitPaths,
+      flags,
+      hasWildcards: wildcardPaths.length > 0,
+    };
+  }
+
+  /**
+   * Get the base path before wildcard characters
+   * "../src/*.ts" -> "../src"
+   * "*.ts" -> null (pattern starts with wildcard)
+   * "/abs/path/**\/*.js" -> "/abs/path"
+   */
+  private getPatternBasePath(pattern: string): string | null {
+    const wildcardIndex = pattern.search(/[*?[{]/);
+    if (wildcardIndex === -1) return pattern;
+    if (wildcardIndex === 0) return null;
+
+    // Find the last directory separator before the wildcard
+    const beforeWildcard = pattern.substring(0, wildcardIndex);
+    const lastSep = Math.max(beforeWildcard.lastIndexOf('/'), beforeWildcard.lastIndexOf('\\'));
+
+    // Handle root directory case: /* -> /
+    if (lastSep === 0 && pattern.startsWith('/')) {
+      return '/';
+    }
+
+    return lastSep > 0 ? beforeWildcard.substring(0, lastSep) : null;
+  }
+
+  /**
+   * Expand wildcard patterns to actual file paths using Rust backend
+   * Returns canonical (resolved) paths to prevent symlink attacks
+   */
+  private async expandWildcards(pattern: string, workspaceRoot: string): Promise<string[]> {
+    try {
+      const results = await invoke<GlobResult[]>('search_files_by_glob', {
+        pattern,
+        path: workspaceRoot,
+        maxResults: 10000, // Safety limit
+      });
+
+      // Use canonical_path (resolved symlinks) for security validation
+      // This prevents symlink attacks where a symlink inside workspace points to external files
+      return results.map((r) => r.canonical_path);
+    } catch (error) {
+      this.logger.warn('Failed to expand wildcard pattern:', pattern, error);
+      return [];
+    }
+  }
+
+  /**
+   * Validate rm command with wildcards
+   * Expands wildcards and validates all resulting paths are within workspace
+   */
+  private async validateWildcardRmCommand(
+    command: string,
+    workspaceRoot: string
+  ): Promise<{ allowed: boolean; reason?: string }> {
+    const extracted = this.extractWildcardPatterns(command);
+
+    if (!extracted.hasWildcards) {
+      return { allowed: true }; // No wildcards, use existing validation
+    }
+
+    // Validate that wildcard patterns themselves don't escape workspace
+    for (const pattern of extracted.wildcardPaths) {
+      // Check for path traversal BEFORE the wildcard
+      // e.g., "../../*.txt" or "/tmp/../home/*"
+      const basePath = this.getPatternBasePath(pattern);
+      if (basePath) {
+        const isWithin = await this.isPathWithinWorkspace(basePath, workspaceRoot);
+        if (!isWithin) {
+          return {
+            allowed: false,
+            reason: `rm command blocked: wildcard pattern "${pattern}" references path outside workspace`,
+          };
+        }
+      }
+    }
+
+    // Expand all wildcards and validate each expanded path
+    for (const pattern of extracted.wildcardPaths) {
+      // Resolve relative patterns against workspace root
+      const isAbs = await isAbsolute(pattern);
+      const fullPattern = isAbs ? pattern : await join(workspaceRoot, pattern);
+      const expandedPaths = await this.expandWildcards(fullPattern, workspaceRoot);
+
+      // If pattern matches nothing, let shell handle it (will show error)
+      if (expandedPaths.length === 0) {
+        continue;
+      }
+
+      // Validate EACH expanded path
+      for (const expandedPath of expandedPaths) {
+        const isWithin = await this.isPathWithinWorkspace(expandedPath, workspaceRoot);
+        if (!isWithin) {
+          return {
+            allowed: false,
+            reason: `rm command blocked: wildcard "${pattern}" would match "${expandedPath}" which is outside workspace`,
+          };
+        }
+      }
+    }
+
+    // Also validate explicit paths
+    for (const explicitPath of extracted.explicitPaths) {
+      const isWithin = await this.isPathWithinWorkspace(explicitPath, workspaceRoot);
+      if (!isWithin) {
+        return {
+          allowed: false,
+          reason: `rm command blocked: path "${explicitPath}" is outside workspace`,
+        };
+      }
+    }
+
+    return { allowed: true };
+  }
+
+  /**
    * Check if the command contains rm and validate the paths
    * Returns error message if rm is not allowed, null if allowed
    */
@@ -347,6 +517,19 @@ export class BashExecutor {
         continue;
       }
 
+      // Check for wildcards first - use specialized validation
+      const extracted = this.extractWildcardPatterns(trimmedPart);
+
+      if (extracted.hasWildcards) {
+        const wildcardResult = await this.validateWildcardRmCommand(trimmedPart, workspaceRoot);
+        if (!wildcardResult.allowed) {
+          return wildcardResult;
+        }
+        // Wildcard validation passed, continue to next part
+        continue;
+      }
+
+      // No wildcards - use existing explicit path validation
       const paths = this.extractRmPaths(trimmedPart);
 
       if (paths.length === 0) {
