@@ -22,15 +22,6 @@ vi.mock('@/services/workspace-root-service', () => ({
 }));
 
 // Mock the logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    trace: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { type BashResult, bashTool } from '../lib/tools/bash-tool';
@@ -84,8 +75,8 @@ describe('bashTool', () => {
     expect(mockInvoke).toHaveBeenCalledWith('execute_user_shell', {
       command: 'ls -l',
       cwd: '/test/root',
-      timeoutMs: undefined,
-      idleTimeoutMs: undefined,
+      timeoutMs: 300000,
+      idleTimeoutMs: 60000,
     });
   });
 

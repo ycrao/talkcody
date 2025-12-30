@@ -784,6 +784,16 @@ const en: LocaleDefinition = {
     githubTooltip: 'Star TalkCody on GitHub',
   },
 
+  Sidebar: {
+    files: 'Files',
+    tasks: 'Tasks',
+    filesTab: 'File Tree',
+    tasksTab: 'Task History',
+    toggleView: 'Toggle sidebar view',
+    collapse: 'Collapse sidebar',
+    expand: 'Expand sidebar',
+  },
+
   Logs: {
     title: 'Logs',
     description: 'View application logs',

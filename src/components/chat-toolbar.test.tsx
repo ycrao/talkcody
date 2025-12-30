@@ -1,23 +1,10 @@
 // src/components/chat-toolbar.test.tsx
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockToast } from '@/test/mocks';
 
 // Mock dependencies
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
-
-vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
+vi.mock('sonner', () => mockToast);
 
 // Mock useToolbarState hook
 const mockUseToolbarState = vi.fn();

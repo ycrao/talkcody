@@ -235,16 +235,16 @@ function createStreamFetch(): TauriFetchFunction {
         if (streamTimeoutId) {
           clearTimeout(streamTimeoutId);
         }
-        // Check for stream timeout every 60 seconds
+        // Check for stream timeout every 300000 seconds
         streamTimeoutId = setTimeout(() => {
           const timeSinceLastChunk = Date.now() - lastChunkTime;
-          if (!closed && timeSinceLastChunk > 60000) {
+          if (!closed && timeSinceLastChunk > 300000) {
             logger.error(
               `[Tauri Stream Fetch] Stream timeout: no data received for ${timeSinceLastChunk}ms`
             );
             close();
           }
-        }, 60000);
+        }, 300000);
       };
 
       const close = () => {
@@ -334,8 +334,4 @@ function createStreamFetch(): TauriFetchFunction {
   };
 }
 
-/**
- * Singleton instance of streamFetch for convenient imports
- * Use this for streaming responses (AI chat completions, SSE)
- */
 export const streamFetch = createStreamFetch();

@@ -3,21 +3,6 @@ import type { ToolSet } from 'ai';
 import { AgentDependencyAnalyzer, MAX_PARALLEL_SUBAGENTS } from './agent-dependency-analyzer';
 import type { ToolCallInfo } from './tool-executor';
 
-// Mock logger
-vi.mock('@/lib/logger', () => {
-  const logger = {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  };
-  return {
-    logger,
-    default: logger,
-  };
-});
-
 // Mock agent registry
 vi.mock('@/services/agents/agent-registry', () => ({
   agentRegistry: {

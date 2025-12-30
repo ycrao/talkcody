@@ -125,9 +125,14 @@ bun run lint
 # Run tests
 bun run test
 
+# Run single test file
+bun run test:file src/path/to/your/test-file.test.tsx
+
 # build
 bun run build
 ```
+
+Note: You couldn't use `bun test` command. must use `bun run test` instead.
 
 ### Log Directory
 

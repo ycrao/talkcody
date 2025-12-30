@@ -1,37 +1,26 @@
-import type { ModelMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MessageCompactor } from '../services/message-compactor';
+
+// Use vi.hoisted to create mock functions that can be referenced in vi.mock
+const mockEstimateTokens = vi.hoisted(() => vi.fn());
+const mockCompactContext = vi.hoisted(() => vi.fn());
+
+// Mock AI Context Compaction Service
+vi.mock('@/services/ai/ai-context-compaction', () => ({
+  aiContextCompactionService: {
+    compactContext: mockCompactContext,
+  },
+}));
+
+import type { ModelMessage } from 'ai';
+import { ContextCompactor } from './context-compactor';
 import type {
   CompressionConfig,
   CompressionResult,
   MessageCompactionOptions,
-} from '../types/agent';
-
-// Use vi.hoisted to create mock functions that can be referenced in vi.mock
-const mockEstimateTokens = vi.hoisted(() => vi.fn());
-
-// Mock logger
-vi.mock('../lib/logger', () => ({
-  logger: {
-    trace: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
-// Mock models module
-vi.mock('../lib/models', () => ({
-  GEMINI_25_FLASH_LITE: 'gemini-2.5-flash-lite',
-  CLAUDE_HAIKU: 'claude-haiku-4.5',
-  NANO_BANANA_PRO: 'gemini-3-pro-image',
-  SCRIBE_V2_REALTIME: 'scribe-v2-realtime',
-  getContextLength: (_model: string) => 200000, // Return a default context length
-}));
+} from '../../types/agent';
 
 // Mock code-navigation-service for estimateTokens
-vi.mock('../services/code-navigation-service', () => ({
+vi.mock('@/services/code-navigation-service', () => ({
   estimateTokens: mockEstimateTokens,
   summarizeCodeContent: vi.fn().mockResolvedValue({
     success: false,
@@ -43,10 +32,11 @@ vi.mock('../services/code-navigation-service', () => ({
 }));
 
 // Mock provider store to provide available models
-vi.mock('../providers/stores/provider-store', () => ({
+vi.mock('@/providers/stores/provider-store', () => ({
   useProviderStore: {
     getState: () => ({
       isModelAvailable: () => true,
+      getProviderModel: vi.fn().mockReturnValue({}),
       availableModels: [
         {
           key: 'google/gemini-2.5-flash-lite',
@@ -61,8 +51,7 @@ vi.mock('../providers/stores/provider-store', () => ({
 }));
 
 describe('MessageCompactor', () => {
-  let messageCompactor: MessageCompactor;
-  let mockChatService: any;
+  let messageCompactor: ContextCompactor;
 
   const defaultConfig: CompressionConfig = {
     enabled: true,
@@ -85,11 +74,8 @@ describe('MessageCompactor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Mock chat service
-    mockChatService = {
-      runAgentLoop: vi.fn().mockImplementation((_options, callbacks) => {
-        // Simulate compression response
-        const mockResponse = `
+    // Mock AI context compaction service with default response
+    const mockResponse = `
 <analysis>
 This is a test compression analysis.
 </analysis>
@@ -103,22 +89,14 @@ This is a test compression analysis.
 7. Pending Tasks: Complete compression testing.
 8. Current Work: Running compression tests.
 `;
-
-        // Simulate streaming
-        setTimeout(() => {
-          callbacks.onChunk(mockResponse);
-          callbacks.onComplete(mockResponse);
-        }, 10);
-
-        return Promise.resolve();
-      }),
-    };
+    
+    mockCompactContext.mockResolvedValue(mockResponse);
 
     // Set default return value for estimateTokens
     // Individual tests can override with mockResolvedValueOnce
     mockEstimateTokens.mockResolvedValue(1000);
 
-    messageCompactor = new MessageCompactor(mockChatService);
+    messageCompactor = new ContextCompactor();
   });
 
 
@@ -139,7 +117,7 @@ This is a test compression analysis.
       expect(result.compressionRatio).toBeLessThan(1);
       expect(result.compressedSummary).toBeTruthy();
       expect(result.preservedMessages).toHaveLength(3);
-      expect(mockChatService.runAgentLoop).toHaveBeenCalledTimes(1);
+      expect(mockCompactContext).toHaveBeenCalledTimes(1);
     });
 
     it('should return original messages when no compression needed', async () => {
@@ -156,7 +134,7 @@ This is a test compression analysis.
       expect(result.compressionRatio).toBe(1.0);
       expect(result.compressedSummary).toBe('');
       expect(result.preservedMessages).toEqual(messages);
-      expect(mockChatService.runAgentLoop).not.toHaveBeenCalled();
+      expect(mockCompactContext).not.toHaveBeenCalled();
     });
 
     it('should compress same messages multiple times', async () => {
@@ -168,11 +146,11 @@ This is a test compression analysis.
 
       // First compression
       const result1 = await messageCompactor.compactMessages(options, 0);
-      expect(mockChatService.runAgentLoop).toHaveBeenCalledTimes(1);
+      expect(mockCompactContext).toHaveBeenCalledTimes(1);
 
       // Second compression with same messages should also call runAgentLoop
       const result2 = await messageCompactor.compactMessages(options, 0);
-      expect(mockChatService.runAgentLoop).toHaveBeenCalledTimes(2);
+      expect(mockCompactContext).toHaveBeenCalledTimes(2);
       // Results should have same structure
       expect(result2.originalMessageCount).toBe(result1.originalMessageCount);
       expect(result2.compressedMessageCount).toBe(result1.compressedMessageCount);
@@ -311,10 +289,8 @@ This is a test compression analysis.
 
   describe('error handling', () => {
     it('should handle compression errors gracefully', async () => {
-      // Mock chat service to throw error
-      mockChatService.runAgentLoop.mockImplementation(() => {
-        throw new Error('Compression failed');
-      });
+      // Mock AI service to reject with error
+      mockCompactContext.mockRejectedValueOnce(new Error('Compression failed'));
 
       const messages = createTestMessages(12);
       const options: MessageCompactionOptions = {
@@ -397,7 +373,7 @@ This is a test compression analysis.
       // The user message is in messagesToCompress and will be compressed.
       expect(result.preservedMessages).toHaveLength(2);
       // Compression is called because the user message needs to be compressed
-      expect(mockChatService.runAgentLoop).toHaveBeenCalled();
+      expect(mockCompactContext).toHaveBeenCalled();
     });
   });
 
@@ -452,11 +428,10 @@ This is a test compression analysis.
       setTimeout(() => abortController.abort(), 50);
 
       // Mock to simulate long-running compression
-      mockChatService.runAgentLoop.mockImplementation((_options: any, callbacks: any) => {
-        return new Promise<void>((resolve) => {
+      mockCompactContext.mockImplementation(() => {
+        return new Promise<string>((resolve) => {
           setTimeout(() => {
-            callbacks.onComplete('aborted response');
-            resolve();
+            resolve('aborted response');
           }, 200);
         });
       });
@@ -875,7 +850,7 @@ This is a test compression analysis.
       }, 0);
 
       // Compression should have been called
-      expect(mockChatService.runAgentLoop).toHaveBeenCalled();
+      expect(mockCompactContext).toHaveBeenCalled();
 
       // The messages to compress should have been filtered
       // We can verify by checking the compression worked
@@ -929,7 +904,7 @@ This is a test compression analysis.
 
       // Should complete compression successfully
       expect(result.compressedSummary).toBeTruthy();
-      expect(mockChatService.runAgentLoop).toHaveBeenCalled();
+      expect(mockCompactContext).toHaveBeenCalled();
     });
 
     it('should apply filter after extracting critical tool calls', async () => {
@@ -1554,7 +1529,7 @@ This is a test compression analysis.
       );
 
       // AI compression should NOT be called (runAgentLoop)
-      expect(mockChatService.runAgentLoop).not.toHaveBeenCalled();
+      expect(mockCompactContext).not.toHaveBeenCalled();
 
       // compressedSummary should be empty (no AI compression)
       expect(result.compressedSummary).toBe('');
@@ -1582,7 +1557,7 @@ This is a test compression analysis.
       );
 
       // AI compression should NOT be called
-      expect(mockChatService.runAgentLoop).not.toHaveBeenCalled();
+      expect(mockCompactContext).not.toHaveBeenCalled();
       expect(result.compressedSummary).toBe('');
       expect(result.compressionRatio).toBe(0.25);
     });
@@ -1603,7 +1578,7 @@ This is a test compression analysis.
       );
 
       // AI compression SHOULD be called
-      expect(mockChatService.runAgentLoop).toHaveBeenCalled();
+      expect(mockCompactContext).toHaveBeenCalled();
 
       // compressedSummary should have content from AI compression
       expect(result.compressedSummary).toBeTruthy();
@@ -1618,7 +1593,7 @@ This is a test compression analysis.
       }, 0);
 
       // AI compression SHOULD be called (no early exit without lastTokenCount)
-      expect(mockChatService.runAgentLoop).toHaveBeenCalled();
+      expect(mockCompactContext).toHaveBeenCalled();
       expect(result.compressedSummary).toBeTruthy();
 
       // estimateTokens should NOT be called when lastTokenCount is not provided
@@ -1637,7 +1612,7 @@ This is a test compression analysis.
       );
 
       // AI compression SHOULD be called (no early exit when lastTokenCount is 0)
-      expect(mockChatService.runAgentLoop).toHaveBeenCalled();
+      expect(mockCompactContext).toHaveBeenCalled();
       expect(result.compressedSummary).toBeTruthy();
 
       // estimateTokens should NOT be called when lastTokenCount is 0
@@ -1687,7 +1662,7 @@ This is a test compression analysis.
       );
 
       // Should skip AI compression
-      expect(mockChatService.runAgentLoop).not.toHaveBeenCalled();
+      expect(mockCompactContext).not.toHaveBeenCalled();
       expect(result.compressedSummary).toBe('');
       expect(result.compressionRatio).toBe(0.01); // 10/1000
     });
@@ -1707,7 +1682,7 @@ This is a test compression analysis.
       );
 
       // AI compression SHOULD be called (74% < 75%)
-      expect(mockChatService.runAgentLoop).toHaveBeenCalled();
+      expect(mockCompactContext).toHaveBeenCalled();
       expect(result.compressedSummary).toBeTruthy();
     });
 
@@ -1723,7 +1698,6 @@ This is a test compression analysis.
       // Mock estimateTokens to trigger early exit
       mockEstimateTokens.mockResolvedValueOnce(100);
 
-      // Mock getContextLength via models mock to set a reasonable threshold
       const largeTokenCount = 200000; // Large enough to trigger compression
 
       const result = await messageCompactor.performCompressionIfNeeded(

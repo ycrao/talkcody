@@ -3,15 +3,7 @@ import type { ProviderDefinition } from '@/types';
 import type { CustomProviderConfig } from '@/types/custom-provider';
 import type { ModelConfig } from '@/types/models';
 
-// Mock dependencies before importing
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
+// Note: Logger is already mocked globally in setup.ts
 
 vi.mock('@/providers/config/model-config', () => ({
   MODEL_CONFIGS: {

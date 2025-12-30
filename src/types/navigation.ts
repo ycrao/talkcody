@@ -1,12 +1,16 @@
 export enum NavigationView {
   EXPLORER = 'explorer',
-  CHAT = 'chat',
   PROJECTS = 'projects',
   AGENTS_MARKETPLACE = 'agents-marketplace',
   SKILLS_MARKETPLACE = 'skills-marketplace',
   MCP_SERVERS = 'mcp-servers',
   LOGS = 'logs',
   SETTINGS = 'settings',
+}
+
+export enum SidebarView {
+  FILES = 'files',
+  TASKS = 'tasks',
 }
 
 export interface NavigationItem {

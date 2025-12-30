@@ -343,13 +343,6 @@ export function isTokenExpired(expiresAt: number): boolean {
 }
 
 /**
- * Get OAuth client ID (for display purposes)
- */
-export function getClientId(): string {
-  return CLIENT_ID;
-}
-
-/**
  * Get redirect URI (for display purposes)
  */
 export function getRedirectUri(): string {
@@ -439,9 +432,8 @@ function createOpenAIOAuthFetch(): FetchFn {
 /**
  * Create an OpenAI provider that uses ChatGPT OAuth authentication
  * The provider will automatically refresh tokens on each request
- * @deprecated accessToken and accountId parameters - now dynamically fetched
  */
-export function createOpenAIOAuthProvider(_accessToken?: string, _accountId?: string | null) {
+export function createOpenAIOAuthProvider() {
   return createOpenAI({
     apiKey: 'oauth-placeholder', // SDK requires this but we override with Bearer token
     fetch: createOpenAIOAuthFetch() as typeof fetch,

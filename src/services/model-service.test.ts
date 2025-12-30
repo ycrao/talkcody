@@ -37,14 +37,6 @@ vi.mock('./agents/agent-registry', () => ({
   },
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
 
 vi.mock('@/providers/models/model-sync-service', () => ({
   modelSyncService: {

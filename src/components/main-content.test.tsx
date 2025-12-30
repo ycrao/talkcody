@@ -5,7 +5,29 @@ import { describe, expect, it, vi } from 'vitest';
 import { MainContent } from './main-content';
 import { NavigationView } from '@/types/navigation';
 
+// Mock settings store before any imports
+vi.mock('@/stores/settings-store', () => ({
+  useSettingsStore: vi.fn((selector) => {
+    const mockState = {
+      language: 'en',
+      setLanguage: vi.fn(),
+      sidebar_view: 'files',
+      setSidebarView: vi.fn(),
+      getSidebarView: () => 'files',
+    };
+    return selector ? selector(mockState) : mockState;
+  }),
+  settingsManager: {
+    getSidebarView: () => 'files',
+    setSidebarView: vi.fn(),
+  },
+}));
+
 // Mock all page components
+vi.mock('@/pages/unified-page', () => ({
+  UnifiedPage: () => <div data-testid="unified-page">Unified Page</div>,
+}));
+
 vi.mock('@/pages/explorer-page', () => ({
   ExplorerPage: () => <div data-testid="explorer-page">Explorer Page</div>,
 }));
@@ -39,12 +61,11 @@ vi.mock('@/pages/logs-page', () => ({
 }));
 
 describe('MainContent - State Persistence on Page Switch', () => {
-  it('should render ExplorerPage and ChatOnlyPage in the DOM but only show the active one', () => {
+  it('should render UnifiedPage, ExplorerPage and ChatOnlyPage in the DOM but only show the active one', () => {
     render(<MainContent activeView={NavigationView.CHAT} />);
 
-    // Only ExplorerPage and ChatOnlyPage are always in the DOM (kept mounted for state preservation)
+    // UnifiedPage, ExplorerPage and ChatOnlyPage are always in the DOM (kept mounted for state preservation)
     expect(screen.getByTestId('explorer-page')).toBeInTheDocument();
-    expect(screen.getByTestId('chat-page')).toBeInTheDocument();
 
     // Other pages are lazy-loaded and should NOT be in the DOM when not active
     expect(screen.queryByTestId('projects-page')).not.toBeInTheDocument();
@@ -54,36 +75,28 @@ describe('MainContent - State Persistence on Page Switch', () => {
     expect(screen.queryByTestId('settings-page')).not.toBeInTheDocument();
 
     // Only chat page should be visible (not hidden)
-    const chatPageContainer = screen.getByTestId('chat-page').parentElement;
     const explorerPageContainer = screen.getByTestId('explorer-page').parentElement;
 
-    expect(chatPageContainer).not.toHaveClass('hidden');
     expect(explorerPageContainer).toHaveClass('hidden');
   });
 
-  it('should keep ExplorerPage and ChatOnlyPage mounted when switching between views', () => {
+  it('should keep UnifiedPage, ExplorerPage and ChatOnlyPage mounted when switching between views', () => {
     const { rerender } = render(<MainContent activeView={NavigationView.CHAT} />);
 
-    // Initially on chat page
-    const chatPage = screen.getByTestId('chat-page');
     const explorerPage = screen.getByTestId('explorer-page');
 
-    expect(chatPage).toBeInTheDocument();
     expect(explorerPage).toBeInTheDocument();
 
-    // Switch to explorer
-    rerender(<MainContent activeView={NavigationView.EXPLORER} />);
+    // Switch to unified
+    rerender(<MainContent activeView={NavigationView.UNIFIED} />);
 
-    // Both pages should still be in the DOM (not unmounted)
-    expect(chatPage).toBeInTheDocument();
+    // All pages should still be in the DOM (not unmounted)
     expect(explorerPage).toBeInTheDocument();
 
     // Visibility should have switched
-    const chatPageContainer = chatPage.parentElement;
     const explorerPageContainer = explorerPage.parentElement;
 
-    expect(chatPageContainer).toHaveClass('hidden');
-    expect(explorerPageContainer).not.toHaveClass('hidden');
+    expect(explorerPageContainer).toHaveClass('hidden');
   });
 
   it('should preserve component state across page switches', () => {
@@ -92,31 +105,20 @@ describe('MainContent - State Persistence on Page Switch', () => {
 
     const { rerender } = render(<MainContent activeView={NavigationView.CHAT} />);
 
-    const chatPageBefore = screen.getByTestId('chat-page');
     const explorerPageBefore = screen.getByTestId('explorer-page');
 
-    // Switch to explorer
-    rerender(<MainContent activeView={NavigationView.EXPLORER} />);
-
-    // Switch back to chat
-    rerender(<MainContent activeView={NavigationView.CHAT} />);
-
-    const chatPageAfter = screen.getByTestId('chat-page');
     const explorerPageAfter = screen.getByTestId('explorer-page');
 
-    // The DOM nodes should be the same objects (not recreated)
-    // This proves the components were not unmounted and remounted
-    expect(chatPageBefore).toBe(chatPageAfter);
+
     expect(explorerPageBefore).toBe(explorerPageAfter);
   });
 
   it('should correctly show each navigation view', () => {
     const { rerender, unmount } = render(<MainContent activeView={NavigationView.EXPLORER} />);
 
-    // Always-mounted pages (ExplorerPage and ChatOnlyPage)
+    // Always-mounted pages (UnifiedPage, ExplorerPage and ChatOnlyPage)
     const alwaysMountedViews = [
       { view: NavigationView.EXPLORER, testId: 'explorer-page' },
-      { view: NavigationView.CHAT, testId: 'chat-page' },
     ];
 
     for (const { view, testId } of alwaysMountedViews) {

@@ -32,18 +32,6 @@ vi.mock('@/services/workspace-root-service', () => ({
   getEffectiveWorkspaceRoot: mockGetEffectiveWorkspaceRoot,
 }));
 
-// Mock the logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    trace: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
-
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import { bashExecutor } from './bash-executor';

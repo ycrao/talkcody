@@ -3,24 +3,9 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentDefinition } from '@/types/agent';
+import { mockToast } from '@/test/mocks';
 
 // Mock all the dependencies before importing the component
-
-// Mock Tauri plugin-sql more comprehensively
-vi.mock('@tauri-apps/plugin-sql', async () => {
-  const mockDb = {
-    execute: vi.fn().mockResolvedValue({ rowsAffected: 0 }),
-    select: vi.fn().mockResolvedValue([]),
-    close: vi.fn().mockResolvedValue(undefined),
-  };
-
-  return {
-    default: {
-      load: vi.fn().mockResolvedValue(mockDb),
-    },
-    load: vi.fn().mockResolvedValue(mockDb),
-  };
-});
 
 // Now import the component
 import { SkillsSelectorButton } from './skills-selector-button';
@@ -35,21 +20,6 @@ vi.mock('@/hooks/use-settings', () => ({
   }),
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
-
-vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
 
 vi.mock('@/services/agents/agent-registry', () => ({
   agentRegistry: {

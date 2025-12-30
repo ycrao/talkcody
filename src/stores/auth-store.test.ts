@@ -4,6 +4,27 @@ import { authService } from '@/services/auth-service';
 import { useAuthStore } from './auth-store';
 
 // Mock dependencies
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  },
+  Toaster: vi.fn(),
+}));
+
+vi.mock('@/stores/settings-store', () => ({
+  useSettingsStore: {
+    getState: vi.fn(() => ({
+      language: 'en',
+      theme: 'dark',
+    })),
+    subscribe: vi.fn(),
+    setState: vi.fn(),
+  },
+}));
+
 vi.mock('@/services/auth-service', () => ({
   authService: {
     initiateGitHubOAuth: vi.fn(),
@@ -12,33 +33,6 @@ vi.mock('@/services/auth-service', () => ({
     fetchUserProfile: vi.fn(),
     signOut: vi.fn(),
     isAuthenticated: vi.fn(),
-  },
-}));
-
-vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
-
-// Mock settings store
-vi.mock('@/stores/settings-store', () => ({
-  useSettingsStore: {
-    getState: vi.fn(() => ({
-      language: 'en',
-    })),
   },
 }));
 
@@ -272,7 +266,7 @@ describe('AuthStore - OAuth Deep Link Flow', () => {
 
   describe('Deep Link Integration Test', () => {
     it('should simulate complete deep link OAuth flow', async () => {
-      // Arrange - simulate clicking "Sign in with GitHub"
+      // Arrange - simulate clicking \"Sign in with GitHub\"
       mockInitiateGitHubOAuth.mockResolvedValueOnce(undefined);
 
       const { signInWithGitHub } = useAuthStore.getState();

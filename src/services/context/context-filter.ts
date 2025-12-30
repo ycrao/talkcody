@@ -8,10 +8,10 @@ import { timedMethod } from '@/lib/timer';
 type AssistantContentPart = TextPart | ToolCallPart;
 
 /**
- * MessageFilter handles message optimization and filtering
+ * ContextFilter handles message optimization and filtering
  * to reduce token usage and improve performance
  */
-export class MessageFilter {
+export class ContextFilter {
   // Exploratory tools that can be filtered after initial discovery phase
   private readonly exploratoryTools = new Set(['glob', 'listFiles', 'codeSearch']);
 
@@ -22,7 +22,7 @@ export class MessageFilter {
    * Main filtering entry point
    * Applies all filtering optimizations to messages
    */
-  @timedMethod('MessageFilter.filterMessages')
+  @timedMethod('ContextFilter.filterMessages')
   filterMessages(messages: ModelMessage[]): ModelMessage[] {
     const toolCallCount = this.countToolCalls(messages);
 
@@ -55,22 +55,16 @@ export class MessageFilter {
     const toolCallIdsToFilter = new Set<string>();
 
     // Collect from duplicate file reads
-    const duplicateIds = this.getDuplicateFileReadIds(messages);
-    for (const id of duplicateIds) {
-      toolCallIdsToFilter.add(id);
-    }
+    this.getDuplicateFileReadIds(messages, toolCallIdsToFilter);
 
-    // Collect from exploratory tools
-    const exploratoryIds = this.getExploratoryToolIds(messages);
-    for (const id of exploratoryIds) {
-      toolCallIdsToFilter.add(id);
-    }
+    // Collect from exploratory tools (skip already filtered ids)
+    this.getExploratoryToolIds(messages, toolCallIdsToFilter);
 
     // Collect from deduplicate tools (todoWrite, exitPlanMode)
-    const deduplicateIds = this.getDeduplicateToolIds(messages);
-    for (const id of deduplicateIds) {
-      toolCallIdsToFilter.add(id);
-    }
+    this.getDeduplicateToolIds(messages, toolCallIdsToFilter);
+
+    // Collect from exact duplicate tool calls (same name and parameters)
+    this.getExactDuplicateToolIds(messages, toolCallIdsToFilter);
 
     return toolCallIdsToFilter;
   }
@@ -78,8 +72,10 @@ export class MessageFilter {
   /**
    * Get toolCallIds for duplicate file reads (keeping only the most recent)
    */
-  private getDuplicateFileReadIds(messages: ModelMessage[]): Set<string> {
-    const duplicateIds = new Set<string>();
+  private getDuplicateFileReadIds(
+    messages: ModelMessage[],
+    skipIds: Set<string> = new Set()
+  ): void {
     // Map to track the latest toolCallId for each unique file read key
     const fileReadMap = new Map<string, string>();
 
@@ -87,12 +83,17 @@ export class MessageFilter {
       if (message.role === 'assistant' && Array.isArray(message.content)) {
         for (const part of message.content) {
           if (part.type === 'tool-call' && part.toolName === 'readFile') {
+            // Skip if already filtered
+            if (part.toolCallId && skipIds.has(part.toolCallId)) {
+              continue;
+            }
+
             const fileReadKey = this.extractFileReadKey(part as ToolCallPart);
             if (fileReadKey && part.toolCallId) {
               const previous = fileReadMap.get(fileReadKey);
               if (previous) {
                 // Mark the old one for removal
-                duplicateIds.add(previous);
+                skipIds.add(previous);
                 logger.info(`Marking duplicate readFile for removal: ${fileReadKey}`);
               }
               fileReadMap.set(fileReadKey, part.toolCallId);
@@ -101,16 +102,12 @@ export class MessageFilter {
         }
       }
     }
-
-    return duplicateIds;
   }
 
   /**
    * Get toolCallIds for exploratory tools outside protection window
    */
-  private getExploratoryToolIds(messages: ModelMessage[]): Set<string> {
-    const exploratoryIds = new Set<string>();
-
+  private getExploratoryToolIds(messages: ModelMessage[], skipIds: Set<string> = new Set()): void {
     // Define a protection window for recent messages
     const protectionWindowSize = 20;
     const protectionThreshold = Math.max(0, messages.length - protectionWindowSize);
@@ -133,22 +130,24 @@ export class MessageFilter {
             this.isExploratoryTool(part.toolName) &&
             part.toolCallId
           ) {
-            exploratoryIds.add(part.toolCallId);
+            // Skip if already filtered
+            if (skipIds.has(part.toolCallId)) {
+              continue;
+            }
+
+            skipIds.add(part.toolCallId);
             logger.info(`Marking exploratory tool for removal: ${part.toolName} at index ${index}`);
           }
         }
       }
     }
-
-    return exploratoryIds;
   }
 
   /**
    * Get toolCallIds for tools that should be deduplicated (keeping only the last occurrence)
    * Unlike file reads, these are deduplicated by tool name only, not by parameters
    */
-  private getDeduplicateToolIds(messages: ModelMessage[]): Set<string> {
-    const duplicateIds = new Set<string>();
+  private getDeduplicateToolIds(messages: ModelMessage[], skipIds: Set<string> = new Set()): void {
     // Map to track the latest toolCallId for each deduplicate tool
     const toolCallMap = new Map<string, string>();
 
@@ -160,10 +159,15 @@ export class MessageFilter {
             part.toolCallId &&
             this.deduplicateTools.has(part.toolName)
           ) {
+            // Skip if already filtered
+            if (skipIds.has(part.toolCallId)) {
+              continue;
+            }
+
             const previous = toolCallMap.get(part.toolName);
             if (previous) {
               // Mark the old one for removal
-              duplicateIds.add(previous);
+              skipIds.add(previous);
               logger.info(`Marking duplicate ${part.toolName} for removal`);
             }
             toolCallMap.set(part.toolName, part.toolCallId);
@@ -171,8 +175,90 @@ export class MessageFilter {
         }
       }
     }
+  }
 
-    return duplicateIds;
+  /**
+   * Get toolCallIds for exact duplicate tool calls (same name and parameters)
+   * This deduplicates ANY tool where both name and parameters are identical
+   * Keeping only the most recent occurrence
+   */
+  private getExactDuplicateToolIds(
+    messages: ModelMessage[],
+    skipIds: Set<string> = new Set()
+  ): void {
+    // Map to track the latest toolCallId for each unique tool call signature
+    const toolCallMap = new Map<string, string>();
+
+    for (const message of messages) {
+      if (message.role === 'assistant' && Array.isArray(message.content)) {
+        for (const part of message.content) {
+          if (part.type === 'tool-call' && part.toolCallId) {
+            // Skip if already filtered
+            if (skipIds.has(part.toolCallId)) {
+              continue;
+            }
+
+            const signature = this.getToolCallSignature(part as ToolCallPart);
+            if (signature) {
+              const previous = toolCallMap.get(signature);
+              if (previous) {
+                // Mark the old one for removal
+                skipIds.add(previous);
+                logger.info(
+                  `Marking exact duplicate tool call for removal: ${part.toolName} (${previous})`
+                );
+              }
+              toolCallMap.set(signature, part.toolCallId);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Generate a unique signature for a tool call based on name and parameters
+   * Used to identify exact duplicates
+   */
+  private getToolCallSignature(toolCall: ToolCallPart): string | null {
+    try {
+      const input =
+        typeof toolCall.input === 'string' ? JSON.parse(toolCall.input) : toolCall.input;
+
+      // Create a deterministic string representation of the tool call
+      // Sort object keys to ensure consistent comparison
+      const sortedInput = this.sortObjectKeys(input);
+      const signature = `${toolCall.toolName}:${JSON.stringify(sortedInput)}`;
+
+      return signature;
+    } catch (error) {
+      logger.warn('Failed to generate tool call signature:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Recursively sort object keys for consistent comparison
+   */
+  private sortObjectKeys(obj: unknown): unknown {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.sortObjectKeys(item));
+    }
+
+    if (typeof obj === 'object') {
+      const sorted: Record<string, unknown> = {};
+      const keys = Object.keys(obj).sort();
+      for (const key of keys) {
+        sorted[key] = this.sortObjectKeys((obj as Record<string, unknown>)[key]);
+      }
+      return sorted;
+    }
+
+    return obj;
   }
 
   /**
@@ -285,7 +371,8 @@ export class MessageFilter {
    * @deprecated Use filterMessages instead
    */
   filterDuplicateFileReads(messages: ModelMessage[]): ModelMessage[] {
-    const duplicateIds = this.getDuplicateFileReadIds(messages);
+    const duplicateIds = new Set<string>();
+    this.getDuplicateFileReadIds(messages, duplicateIds);
     if (duplicateIds.size === 0) {
       return messages;
     }
@@ -296,7 +383,8 @@ export class MessageFilter {
    * @deprecated Use filterMessages instead
    */
   filterExploratoryTools(messages: ModelMessage[]): ModelMessage[] {
-    const exploratoryIds = this.getExploratoryToolIds(messages);
+    const exploratoryIds = new Set<string>();
+    this.getExploratoryToolIds(messages, exploratoryIds);
     if (exploratoryIds.size === 0) {
       return messages;
     }

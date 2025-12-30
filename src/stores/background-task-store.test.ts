@@ -11,13 +11,6 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 // Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
 
 describe('BackgroundTaskStore', () => {
   // Reset store state before each test

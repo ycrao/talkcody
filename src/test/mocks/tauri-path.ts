@@ -1,0 +1,51 @@
+// src/test/mocks/tauri-path.ts
+// Centralized mock for @tauri-apps/api/path
+// Used by 11+ test files
+
+import { vi } from 'vitest';
+
+const DEFAULT_APP_DATA_DIR = '/test/app-data';
+const _DEFAULT_ROOT = '/test/root';
+
+export const createMockTauriPath = (
+  overrides: {
+    normalize?: (path: string) => string | Promise<string>;
+    appDataDir?: string;
+    join?: (...paths: string[]) => string | Promise<string>;
+    dirname?: (path: string) => string | Promise<string>;
+    isAbsolute?: (path: string) => boolean | Promise<boolean>;
+  } = {}
+) => ({
+  normalize: vi.fn().mockImplementation(overrides.normalize ?? ((path: string) => path)),
+  appDataDir: vi.fn().mockResolvedValue(overrides.appDataDir ?? DEFAULT_APP_DATA_DIR),
+  join: vi.fn().mockImplementation(
+    overrides.join ??
+      ((...paths: string[]) => {
+        const filtered = paths.filter((p) => p && p !== '.');
+        return filtered.join('/');
+      })
+  ),
+  dirname: vi.fn().mockImplementation(
+    overrides.dirname ??
+      ((path: string) => {
+        const parts = path.split('/');
+        parts.pop();
+        return parts.join('/') || '/';
+      })
+  ),
+  isAbsolute: vi
+    .fn()
+    .mockImplementation(overrides.isAbsolute ?? ((path: string) => path.startsWith('/'))),
+});
+
+// Default instance
+export const mockTauriPath = createMockTauriPath();
+
+/**
+ * Mock module for vi.mock('@tauri-apps/api/path', ...)
+ * Usage:
+ * ```typescript
+ * vi.mock('@tauri-apps/api/path', () => mockTauriPath);
+ * ```
+ */
+export default mockTauriPath;

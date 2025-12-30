@@ -751,6 +751,16 @@ export interface LocaleDefinition {
     githubTooltip: string;
   };
 
+  Sidebar: {
+    files: string;
+    tasks: string;
+    filesTab: string;
+    tasksTab: string;
+    toggleView: string;
+    collapse: string;
+    expand: string;
+  };
+
   Initialization: {
     title: string;
     description: string;

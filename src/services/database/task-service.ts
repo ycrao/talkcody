@@ -27,7 +27,7 @@ export class TaskService {
 
   async getTasks(projectId?: string): Promise<Task[]> {
     let sql = 'SELECT * FROM conversations';
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (projectId) {
       sql += ' WHERE project_id = $1';
@@ -264,8 +264,9 @@ export class TaskService {
 
   @timedMethod('updateTaskSettings')
   async updateTaskSettings(taskId: string, settings: string): Promise<void> {
+    const settingsStr = typeof settings === 'string' ? settings : JSON.stringify(settings);
     await this.db.execute('UPDATE conversations SET settings = $1, updated_at = $2 WHERE id = $3', [
-      settings,
+      settingsStr,
       Date.now(),
       taskId,
     ]);

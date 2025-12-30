@@ -17,7 +17,7 @@ type AssistantContentPart = TextPart | ToolCallPart;
  * Uses tree-sitter to summarize large code files, keeping only signatures
  * and key definitions while reducing token usage.
  */
-export class MessageRewriter {
+export class ContextRewriter {
   private readonly LINE_THRESHOLD = 100; // Only summarize files exceeding this line count
 
   /**
@@ -27,7 +27,7 @@ export class MessageRewriter {
    * - Finds writeFile tool calls with large content and summarizes them
    * - Adds [COMPRESSED] marker to indicate content has been summarized
    */
-  @timedMethod('MessageRewriter.rewriteMessages')
+  @timedMethod('ContextRewriter.rewriteMessages')
   async rewriteMessages(messages: ModelMessage[]): Promise<ModelMessage[]> {
     const result: ModelMessage[] = [];
 
@@ -122,17 +122,6 @@ export class MessageRewriter {
         // Summarization failed (unsupported language), keep original
         return part;
       }
-
-      const originalChars = result.content.length;
-      const summaryChars = summary.summary.length;
-      const summaryLines = summary.summary.split('\n').length;
-      const charReduction = Math.round((1 - summaryChars / originalChars) * 100);
-
-      logger.info(`MessageRewriter: Compressed readFile result for ${result.file_path}`, {
-        original: { lines: summary.original_lines, chars: originalChars },
-        summary: { lines: summaryLines, chars: summaryChars },
-        reduction: `${charReduction}%`,
-      });
 
       // Return modified result with summarized content (keep type: 'text' to match input format)
       return {
@@ -247,10 +236,6 @@ export class MessageRewriter {
     }
   }
 
-  /**
-   * Summarize code content using tree-sitter via Tauri command
-   */
-  @timedMethod('MessageRewriter.summarizeContent')
   private async summarizeContent(
     content: string,
     langId: string,

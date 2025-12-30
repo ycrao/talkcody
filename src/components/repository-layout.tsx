@@ -1,6 +1,7 @@
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Folder, ListTodo, Maximize2, Minimize2, Plus, Search } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useShallow } from 'zustand/react/shallow';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,10 +13,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useGlobalFileSearch } from '@/hooks/use-global-file-search';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
+import { useTranslation } from '@/hooks/use-locale';
 import { useRepositoryWatcher } from '@/hooks/use-repository-watcher';
 import { useTasks } from '@/hooks/use-tasks';
 import { useWorktreeConflict } from '@/hooks/use-worktree-conflict';
@@ -24,6 +28,7 @@ import { databaseService } from '@/services/database-service';
 import type { LintDiagnostic } from '@/services/lint-service';
 import { getRelativePath } from '@/services/repository-utils';
 import { terminalService } from '@/services/terminal-service';
+import { useExecutionStore } from '@/stores/execution-store';
 import { useGitStore } from '@/stores/git-store';
 import { useLintStore } from '@/stores/lint-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -31,6 +36,7 @@ import { useRepositoryStore } from '@/stores/repository-store';
 import { settingsManager } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useWorktreeStore } from '@/stores/worktree-store';
+import { SidebarView } from '@/types/navigation';
 import { ChatBox, type ChatBoxRef } from './chat-box';
 import { ChatPanelHeader } from './chat-panel-header';
 import { DiagnosticsPanel } from './diagnostics/diagnostics-panel';
@@ -42,10 +48,15 @@ import { FileTreeHeader } from './file-tree-header';
 import { GitStatusBar } from './git/git-status-bar';
 import { GlobalContentSearch } from './search/global-content-search';
 import { GlobalFileSearch } from './search/global-file-search';
+import { TaskList } from './task-list';
 import { TerminalPanel } from './terminal/terminal-panel';
 import { WorktreeConflictDialog } from './worktree/worktree-conflict-dialog';
 
 export function RepositoryLayout() {
+  const t = useTranslation();
+  const [sidebarView, setSidebarView] = useState<SidebarView>(SidebarView.FILES);
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
+
   const emptyRepoPanelId = useId();
   const fileTreePanelId = useId();
   const fileEditorPanelId = useId();
@@ -130,7 +141,40 @@ export function RepositoryLayout() {
     }
   };
 
-  const { currentTaskId, selectTask, startNewChat } = useTasks();
+  const {
+    tasks,
+    loading: tasksLoading,
+    editingId,
+    editingTitle,
+    setEditingTitle,
+    deleteTask,
+    finishEditing,
+    startEditing,
+    cancelEditing,
+    selectTask,
+    currentTaskId,
+    startNewChat,
+    loadTasks,
+  } = useTasks();
+
+  // Task History state
+  const runningTaskIds = useExecutionStore(useShallow((state) => state.getRunningTaskIds()));
+  const isMaxReached = useExecutionStore((state) => state.isMaxReached());
+  const getWorktreeForTask = useWorktreeStore((state) => state.getWorktreeForTask);
+
+  // Worktree deletion confirmation state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    taskId: string;
+    changesCount: number;
+    message: string;
+  } | null>(null);
+
+  // Filter tasks based on search query and current project
+  const filteredTasks = tasks.filter((task) => {
+    const matchesSearch = task.title.toLowerCase().includes(taskSearchQuery.toLowerCase());
+    const matchesProject = currentProjectId ? task.project_id === currentProjectId : true;
+    return matchesSearch && matchesProject;
+  });
 
   // Worktree conflict handling
   const {
@@ -197,6 +241,12 @@ export function RepositoryLayout() {
     }
   }, [isContentSearchVisible]);
 
+  useEffect(() => {
+    if (sidebarView === SidebarView.TASKS) {
+      loadTasks(currentProjectId || undefined);
+    }
+  }, [sidebarView, currentProjectId, loadTasks]);
+
   // Load current project ID from settings
   useEffect(() => {
     const loadCurrentSettings = async () => {
@@ -252,7 +302,32 @@ export function RepositoryLayout() {
       return;
     }
     startNewChat();
-    setIsHistoryOpen(false);
+    // If we're in tasks view, we don't need to close anything
+    // If we were in history sidebar (old design), we would close it
+  };
+
+  // Handle task deletion with worktree confirmation
+  const handleDeleteTask = async (taskId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const result = await deleteTask(taskId);
+    if (result.requiresConfirmation && result.changesCount && result.message) {
+      setDeleteConfirmation({
+        taskId,
+        changesCount: result.changesCount,
+        message: result.message,
+      });
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteConfirmation) {
+      await deleteTask(deleteConfirmation.taskId, { force: true });
+      setDeleteConfirmation(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmation(null);
   };
 
   // Handle discard and continue with new chat
@@ -286,7 +361,7 @@ export function RepositoryLayout() {
 
   const handleHistoryTaskSelect = (taskId: string) => {
     selectTask(taskId);
-    setIsHistoryOpen(false);
+    // No need to close history sidebar anymore as it's part of the main layout
   };
 
   const handleTaskStart = (taskId: string, _title: string) => {
@@ -460,7 +535,41 @@ export function RepositoryLayout() {
                         onOpenFileSearch={openFileSearch}
                         onOpenContentSearch={() => setIsContentSearchVisible(true)}
                       />
-                      <div className="flex-1 overflow-auto">
+
+                      {/* View Switcher Tabs */}
+                      <div className=" border-b px-2 py-1">
+                        <Tabs
+                          value={sidebarView}
+                          onValueChange={(v) => {
+                            setSidebarView(v as SidebarView);
+                            settingsManager.setSidebarView(v);
+                          }}
+                        >
+                          <TabsList className="grid w-full grid-cols-2 h-7 bg-muted/50 p-0.5">
+                            <TabsTrigger
+                              value={SidebarView.FILES}
+                              className="h-6 gap-1.5 px-2.5 text-[11px] data-[state=active]:shadow-none"
+                            >
+                              <Folder className="h-3.5 w-3.5" />
+                              {t.Sidebar.files || 'Files'}
+                            </TabsTrigger>
+                            <TabsTrigger
+                              value={SidebarView.TASKS}
+                              className="h-6 gap-1.5 px-2.5 text-[11px] data-[state=active]:shadow-none"
+                            >
+                              <ListTodo className="h-3.5 w-3.5" />
+                              {t.Sidebar.tasks || 'Tasks'}
+                            </TabsTrigger>
+                          </TabsList>
+                        </Tabs>
+                      </div>
+
+                      {/* Files View */}
+                      <div
+                        className={
+                          sidebarView === SidebarView.FILES ? 'flex-1 overflow-auto' : 'hidden'
+                        }
+                      >
                         <FileTree
                           key={rootPath}
                           fileTree={fileTree}
@@ -472,9 +581,71 @@ export function RepositoryLayout() {
                           onFileSelect={selectFile}
                           onRefresh={refreshFileTree}
                           selectedFile={selectedFilePath}
-                          onLoadChildren={loadDirectoryChildren}
+                          onLoadChildren={async (node) => {
+                            await loadDirectoryChildren(node);
+                            return node.children || [];
+                          }}
                           onToggleExpansion={toggleExpansion}
                         />
+                      </div>
+
+                      {/* Tasks View */}
+                      <div
+                        className={
+                          sidebarView === SidebarView.TASKS
+                            ? 'flex flex-1 flex-col overflow-hidden'
+                            : 'hidden'
+                        }
+                      >
+                        {/* Task Tools */}
+                        <div className="flex items-center gap-2 border-b p-2">
+                          <div className="relative flex-1">
+                            <Search className="-translate-y-1/2 absolute top-1/2 left-2.5 h-3.5 w-3.5 text-gray-400" />
+                            <Input
+                              className="h-8 pl-8 text-xs"
+                              onChange={(e) => setTaskSearchQuery(e.target.value)}
+                              placeholder={t.Sidebar.tasks || 'Search tasks...'}
+                              value={taskSearchQuery}
+                            />
+                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                className="h-8 w-8 p-0"
+                                disabled={isMaxReached}
+                                onClick={handleNewChat}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            {isMaxReached && (
+                              <TooltipContent>
+                                <p>Maximum concurrent tasks reached</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </div>
+
+                        {/* Task List */}
+                        <div className="flex-1 overflow-auto">
+                          <TaskList
+                            tasks={filteredTasks}
+                            currentTaskId={currentTaskId}
+                            editingId={editingId}
+                            editingTitle={editingTitle}
+                            loading={tasksLoading}
+                            getWorktreeForTask={getWorktreeForTask}
+                            onCancelEdit={cancelEditing}
+                            onTaskSelect={handleHistoryTaskSelect}
+                            onDeleteTask={handleDeleteTask}
+                            onSaveEdit={finishEditing}
+                            onStartEditing={startEditing}
+                            onTitleChange={setEditingTitle}
+                            runningTaskIds={runningTaskIds}
+                          />
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -710,6 +881,25 @@ export function RepositoryLayout() {
         onCancel={cancelOperation}
         onClose={resetWorktreeState}
       />
+
+      {/* Worktree deletion confirmation dialog */}
+      <AlertDialog open={!!deleteConfirmation} onOpenChange={() => setDeleteConfirmation(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Task with Uncommitted Changes?</AlertDialogTitle>
+            <AlertDialogDescription>{deleteConfirmation?.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDelete}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmDelete}
+            >
+              Delete Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

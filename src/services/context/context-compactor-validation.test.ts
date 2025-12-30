@@ -1,35 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { ModelMessage } from 'ai';
-import { MessageCompactor, type ValidationResult } from '@/services/message-compactor';
-import type { CompressionResult } from '@/types/agent';
 
-// Mock the logger to suppress output during tests
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
+// Mock dependencies FIRST
+const mockCompactContext = vi.hoisted(() => vi.fn());
+
+// Mock AI Context Compaction Service
+vi.mock('@/services/ai/ai-context-compaction', () => ({
+  aiContextCompactionService: {
+    compactContext: mockCompactContext,
   },
 }));
 
+import type { ModelMessage } from 'ai';
+import type { CompressionResult } from '@/types/agent';
+import { ContextCompactor } from './context-compactor';
+
 describe('MessageCompactor Validation', () => {
-  let messageCompactor: MessageCompactor;
-  let mockChatService: {
-    runAgentLoop: ReturnType<typeof vi.fn>;
-  };
+  let messageCompactor: ContextCompactor;
 
   beforeEach(() => {
-    mockChatService = {
-      runAgentLoop: vi.fn(),
-    };
-    messageCompactor = new MessageCompactor(mockChatService);
+    vi.clearAllMocks();
+    messageCompactor = new ContextCompactor();
   });
 
   describe('adjustPreserveBoundary', () => {
     // Access private method for testing
     const callAdjustPreserveBoundary = (
-      compactor: MessageCompactor,
+      compactor: ContextCompactor,
       messages: ModelMessage[],
       preserveCount: number
     ): number => {
@@ -679,13 +675,8 @@ ${'Extra content to make it long. '.repeat(300)}`;
 
   describe('Integration: compactMessages with boundary adjustment', () => {
     beforeEach(() => {
-      // Mock runAgentLoop to return a summary
-      mockChatService.runAgentLoop.mockImplementation(
-        (_options, callbacks) => {
-          callbacks.onComplete('Mocked compression summary');
-          return Promise.resolve();
-        }
-      );
+      // Mock compactContext to return a summary
+      mockCompactContext.mockResolvedValue('Mocked compression summary');
     });
 
     it('should preserve tool-call/tool-result pairs during compression', async () => {

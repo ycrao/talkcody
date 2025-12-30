@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+
 import { FileDiffPreview } from './file-diff-preview';
 
 // Mock useSettingsStore to return English language

@@ -16,14 +16,6 @@ vi.mock('@/services/workspace-root-service', () => ({
   getValidatedWorkspaceRoot: vi.fn().mockResolvedValue('/test/workspace'),
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
 
 describe('DynamicContextPanel', () => {
   const mockAgent: AgentDefinition = {

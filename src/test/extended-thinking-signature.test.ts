@@ -3,6 +3,9 @@
 // This ensures thinking blocks with signatures are properly captured and passed back to the API
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Mock logger FIRST before any imports that may use it
+
 import { StreamProcessor } from '@/services/agents/stream-processor';
 
 // Mock the settings store
@@ -15,7 +18,6 @@ vi.mock('@/stores/settings-store', () => ({
 // Mock model-config to avoid circular dependency
 vi.mock('@/providers/config/model-config', () => ({
   GPT5_MINI: 'gpt-5-mini',
-  GPT51_CODE_MAX: 'gpt-51-codex-max',
   MINIMAX_M21: 'minimax-m21',
   GEMINI_25_FLASH_LITE: 'gemini-2.5-flash-lite',
   CODE_STARL: 'codestral',
@@ -31,14 +33,6 @@ vi.mock('@/providers/config/model-config', () => ({
 }));
 
 // Mock the logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
 
 describe('Extended Thinking Signature Handling', () => {
   let processor: StreamProcessor;

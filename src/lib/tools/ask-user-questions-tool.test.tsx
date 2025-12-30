@@ -1,9 +1,8 @@
-import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { askUserQuestionsTool } from './ask-user-questions-tool';
 import type { AskUserQuestionsOutput } from '@/types/user-question';
 
 // Mock dependencies
+
 const mockStoreState = {
   setPendingQuestions: vi.fn(),
   submitAnswers: vi.fn(),
@@ -28,15 +27,18 @@ vi.mock('@/stores/user-question-store', () => ({
   ),
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    trace: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
+vi.mock('@/stores/settings-store', () => ({
+  useSettingsStore: vi.fn((selector) => {
+    const state = { language: 'en' };
+    if (typeof selector === 'function') {
+      return selector(state);
+    }
+    return state;
+  }),
 }));
+
+import { render, screen } from '@testing-library/react';
+import { askUserQuestionsTool } from './ask-user-questions-tool';
 
 vi.mock('@/stores/settings-store', () => ({
   useSettingsStore: vi.fn((selector) => {

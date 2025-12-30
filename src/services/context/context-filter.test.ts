@@ -1,15 +1,6 @@
 import type { ModelMessage, ToolCallPart, ToolResultPart } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MessageFilter } from './message-filter';
-
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
+import { ContextFilter } from './context-filter';
 
 // Helper to create a tool-call message
 function createToolCallMessage(
@@ -62,11 +53,11 @@ function createReadFilePair(
 }
 
 describe('MessageFilter', () => {
-  let messageFilter: MessageFilter;
+  let messageFilter: ContextFilter;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    messageFilter = new MessageFilter();
+    messageFilter = new ContextFilter();
   });
 
   describe('filterMessages', () => {
@@ -729,6 +720,305 @@ describe('MessageFilter', () => {
 
       // editFile should NOT be filtered (not exploratory)
       expect(result.length).toBe(27);
+    });
+  });
+
+  describe('exact duplicate tool calls (same name and parameters)', () => {
+    it('should filter duplicate bash commands with identical parameters', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-bash-1', 'bash', {
+          command: 'ls -la',
+          runInBackground: false,
+        }),
+        createToolResultMessage('call-bash-1', 'bash', 'file1.ts\nfile2.ts'),
+        { role: 'user', content: 'What files are there?' },
+        createToolCallMessage('call-bash-2', 'bash', {
+          command: 'ls -la',
+          runInBackground: false,
+        }),
+        createToolResultMessage('call-bash-2', 'bash', 'file1.ts\nfile2.ts'),
+        { role: 'user', content: 'Check again' },
+        createToolCallMessage('call-bash-3', 'bash', {
+          command: 'ls -la',
+          runInBackground: false,
+        }),
+        createToolResultMessage('call-bash-3', 'bash', 'file1.ts\nfile2.ts'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // Should keep: 2 user messages + last bash pair (2 messages) = 4 messages
+      expect(result.length).toBe(4);
+
+      // Verify only the last bash call remains
+      const toolCalls = result.filter(
+        (m) => m.role === 'assistant' && Array.isArray(m.content)
+      );
+      expect(toolCalls.length).toBe(1);
+
+      const toolCall = toolCalls[0];
+      if (toolCall.role === 'assistant' && Array.isArray(toolCall.content)) {
+        const part = toolCall.content[0] as ToolCallPart;
+        expect(part.toolCallId).toBe('call-bash-3');
+        expect(part.toolName).toBe('bash');
+      }
+    });
+
+    it('should NOT filter bash commands with different parameters', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-bash-1', 'bash', {
+          command: 'ls -la',
+          runInBackground: false,
+        }),
+        createToolResultMessage('call-bash-1', 'bash', 'output1'),
+        createToolCallMessage('call-bash-2', 'bash', {
+          command: 'pwd',
+          runInBackground: false,
+        }),
+        createToolResultMessage('call-bash-2', 'bash', 'output2'),
+        createToolCallMessage('call-bash-3', 'bash', {
+          command: 'ls -la',
+          runInBackground: true, // Different parameter
+        }),
+        createToolResultMessage('call-bash-3', 'bash', 'output3'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // All commands should remain (different parameters)
+      expect(result.length).toBe(6);
+
+      const toolCallIds = new Set<string>();
+      for (const msg of result) {
+        if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if (part.type === 'tool-call') {
+              toolCallIds.add((part as ToolCallPart).toolCallId);
+            }
+          }
+        }
+      }
+
+      expect(toolCallIds.has('call-bash-1')).toBe(true);
+      expect(toolCallIds.has('call-bash-2')).toBe(true);
+      expect(toolCallIds.has('call-bash-3')).toBe(true);
+    });
+
+    it('should handle parameter order differences (should still be considered duplicates)', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-1', 'bash', {
+          command: 'ls',
+          runInBackground: false,
+        }),
+        createToolResultMessage('call-1', 'bash', 'output1'),
+        createToolCallMessage('call-2', 'bash', {
+          runInBackground: false, // Different order, same values
+          command: 'ls',
+        }),
+        createToolResultMessage('call-2', 'bash', 'output2'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // Should filter duplicate (parameter order shouldn't matter)
+      expect(result.length).toBe(2);
+
+      const toolCall = result[0];
+      if (toolCall.role === 'assistant' && Array.isArray(toolCall.content)) {
+        const part = toolCall.content[0] as ToolCallPart;
+        expect(part.toolCallId).toBe('call-2');
+      }
+    });
+
+    it('should filter exact duplicate editFile calls', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-edit-1', 'editFile', {
+          file_path: '/file.ts',
+          edits: [{ old_string: 'old', new_string: 'new' }],
+        }),
+        createToolResultMessage('call-edit-1', 'editFile', 'edited'),
+        createToolCallMessage('call-edit-2', 'editFile', {
+          file_path: '/file.ts',
+          edits: [{ old_string: 'old', new_string: 'new' }],
+        }),
+        createToolResultMessage('call-edit-2', 'editFile', 'edited'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // Should keep only the last editFile
+      expect(result.length).toBe(2);
+
+      const toolCall = result[0];
+      if (toolCall.role === 'assistant' && Array.isArray(toolCall.content)) {
+        const part = toolCall.content[0] as ToolCallPart;
+        expect(part.toolCallId).toBe('call-edit-2');
+      }
+    });
+
+    it('should NOT filter editFile calls with different edits', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-edit-1', 'editFile', {
+          file_path: '/file.ts',
+          edits: [{ old_string: 'old1', new_string: 'new1' }],
+        }),
+        createToolResultMessage('call-edit-1', 'editFile', 'edited'),
+        createToolCallMessage('call-edit-2', 'editFile', {
+          file_path: '/file.ts',
+          edits: [{ old_string: 'old2', new_string: 'new2' }], // Different edits
+        }),
+        createToolResultMessage('call-edit-2', 'editFile', 'edited'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // Both edits should remain (different parameters)
+      expect(result.length).toBe(4);
+    });
+
+    it('should filter exact duplicates across different tool types independently', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-bash-1', 'bash', { command: 'ls' }),
+        createToolResultMessage('call-bash-1', 'bash', 'output'),
+        createToolCallMessage('call-edit-1', 'editFile', { file_path: '/file.ts' }),
+        createToolResultMessage('call-edit-1', 'editFile', 'edited'),
+        createToolCallMessage('call-bash-2', 'bash', { command: 'ls' }), // Duplicate bash
+        createToolResultMessage('call-bash-2', 'bash', 'output'),
+        createToolCallMessage('call-edit-2', 'editFile', { file_path: '/file.ts' }), // Duplicate edit
+        createToolResultMessage('call-edit-2', 'editFile', 'edited'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // Should keep only the last of each type
+      expect(result.length).toBe(4);
+
+      const toolCallIds = new Set<string>();
+      for (const msg of result) {
+        if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if (part.type === 'tool-call') {
+              toolCallIds.add((part as ToolCallPart).toolCallId);
+            }
+          }
+        }
+      }
+
+      expect(toolCallIds.has('call-bash-2')).toBe(true);
+      expect(toolCallIds.has('call-edit-2')).toBe(true);
+      expect(toolCallIds.has('call-bash-1')).toBe(false);
+      expect(toolCallIds.has('call-edit-1')).toBe(false);
+    });
+
+    it('should handle complex nested parameters when detecting duplicates', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-1', 'customTool', {
+          config: {
+            nested: { value: 123, array: [1, 2, 3] },
+            flag: true,
+          },
+        }),
+        createToolResultMessage('call-1', 'customTool', 'result1'),
+        createToolCallMessage('call-2', 'customTool', {
+          config: {
+            nested: { value: 123, array: [1, 2, 3] },
+            flag: true,
+          },
+        }),
+        createToolResultMessage('call-2', 'customTool', 'result2'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // Should filter duplicate with nested parameters
+      expect(result.length).toBe(2);
+
+      const toolCall = result[0];
+      if (toolCall.role === 'assistant' && Array.isArray(toolCall.content)) {
+        const part = toolCall.content[0] as ToolCallPart;
+        expect(part.toolCallId).toBe('call-2');
+      }
+    });
+
+    it('should work in combination with other filtering rules', () => {
+      const messages: ModelMessage[] = [
+        // Duplicate readFile (handled by getDuplicateFileReadIds)
+        ...createReadFilePair('call-read-1', '/file.ts'),
+        ...createReadFilePair('call-read-2', '/file.ts'),
+        // Duplicate bash (handled by getExactDuplicateToolIds)
+        createToolCallMessage('call-bash-1', 'bash', { command: 'ls' }),
+        createToolResultMessage('call-bash-1', 'bash', 'output'),
+        createToolCallMessage('call-bash-2', 'bash', { command: 'ls' }),
+        createToolResultMessage('call-bash-2', 'bash', 'output'),
+        // Multiple todoWrite (handled by getDeduplicateToolIds)
+        createToolCallMessage('call-todo-1', 'todoWrite', { todos: [] }),
+        createToolResultMessage('call-todo-1', 'todoWrite', 'ok'),
+        createToolCallMessage('call-todo-2', 'todoWrite', { todos: [{ task: 'new' }] }),
+        createToolResultMessage('call-todo-2', 'todoWrite', 'ok'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // Should keep:
+      // - Last readFile pair (2 messages)
+      // - Last bash pair (2 messages)
+      // - Last todoWrite pair (2 messages)
+      // Total: 6 messages
+      expect(result.length).toBe(6);
+
+      const toolCallIds = new Set<string>();
+      for (const msg of result) {
+        if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if (part.type === 'tool-call') {
+              toolCallIds.add((part as ToolCallPart).toolCallId);
+            }
+          }
+        }
+      }
+
+      // Verify only the latest of each type remains
+      expect(toolCallIds.has('call-read-2')).toBe(true);
+      expect(toolCallIds.has('call-bash-2')).toBe(true);
+      expect(toolCallIds.has('call-todo-2')).toBe(true);
+
+      expect(toolCallIds.has('call-read-1')).toBe(false);
+      expect(toolCallIds.has('call-bash-1')).toBe(false);
+      expect(toolCallIds.has('call-todo-1')).toBe(false);
+    });
+
+    it('should not filter when parameters are null or undefined', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-1', 'bash', { command: 'ls', flag: null }),
+        createToolResultMessage('call-1', 'bash', 'output1'),
+        createToolCallMessage('call-2', 'bash', { command: 'ls', flag: undefined }),
+        createToolResultMessage('call-2', 'bash', 'output2'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // null and undefined are different, so both should remain
+      expect(result.length).toBe(4);
+    });
+
+    it('should handle empty parameters correctly', () => {
+      const messages: ModelMessage[] = [
+        createToolCallMessage('call-1', 'customTool', {}),
+        createToolResultMessage('call-1', 'customTool', 'result1'),
+        createToolCallMessage('call-2', 'customTool', {}),
+        createToolResultMessage('call-2', 'customTool', 'result2'),
+      ];
+
+      const result = messageFilter.filterMessages(messages);
+
+      // Empty parameters should still be considered duplicates
+      expect(result.length).toBe(2);
+
+      const toolCall = result[0];
+      if (toolCall.role === 'assistant' && Array.isArray(toolCall.content)) {
+        const part = toolCall.content[0] as ToolCallPart;
+        expect(part.toolCallId).toBe('call-2');
+      }
     });
   });
 });

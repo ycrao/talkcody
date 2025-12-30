@@ -5,15 +5,6 @@ import { ExaSearch, isExaMCPAvailable } from './exa-search';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
 describe('ExaSearch', () => {
   let exaSearch: ExaSearch;
 

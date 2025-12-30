@@ -4,24 +4,6 @@ import { z } from 'zod';
 import type { AgentLoopState } from '@/types/agent';
 import { ToolExecutor } from './tool-executor';
 
-// Mock dependencies
-vi.mock('@/lib/logger', () => ({
-  default: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
-
 describe('tool-executor - callAgent toolCallId passing', () => {
   let mockCallAgentExecute: any;
   let mockTools: ToolSet;

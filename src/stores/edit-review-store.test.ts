@@ -6,13 +6,6 @@ import {
 } from './edit-review-store';
 
 // Mock logger to avoid console noise
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
 
 // Helper to create a mock PendingEdit
 function createMockPendingEdit(id: string, filePath = '/test/file.ts'): PendingEdit {

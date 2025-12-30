@@ -50,12 +50,11 @@ export function ProjectsPage() {
         if (project.root_path) {
           // Project has root_path: open repository and navigate to EXPLORER
           await openRepository(project.root_path, projectId);
-          setActiveView(NavigationView.EXPLORER);
         } else {
           // Project has no root_path: set as current project and navigate to CHAT
           await settingsManager.setCurrentProjectId(projectId);
-          setActiveView(NavigationView.CHAT);
         }
+        setActiveView(NavigationView.EXPLORER);
       }
     } catch (error) {
       logger.error('Failed to open project:', error);

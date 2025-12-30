@@ -2,15 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isValidToolName, normalizeToolName } from './tool-name-normalizer';
 
-// Mock logger to avoid Tauri dependencies
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    warn: vi.fn(),
-    info: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
 // Mock getAllToolNames to avoid importing the entire tools module
 // Note: These are the TOOL_DEFINITIONS keys (now without Tool suffix)
 vi.mock('@/lib/tools', () => ({

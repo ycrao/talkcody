@@ -2,16 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UIMessage } from '@/types/agent';
 import { convertMessages } from './llm-utils';
 
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
-
 describe('convertMessages', () => {
   const defaultOptions = {
     systemPrompt: 'You are a helpful assistant.',

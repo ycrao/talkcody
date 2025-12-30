@@ -64,6 +64,7 @@ class AgentRegistry {
     const { ExploreAgent } = await import('./explore-agent');
     const { DocumentWriterAgent } = await import('./document-writer-agent');
     const { TestWriterAgent } = await import('./test-writer-agent');
+    const { CodingAgent } = await import('./coding-agent');
     const { InitProjectAgent } = await import('./init-project-agent');
     const { ImageGeneratorAgent } = await import('./image-generator-agent');
 
@@ -79,6 +80,7 @@ class AgentRegistry {
       ExploreAgent.getDefinition(),
       DocumentWriterAgent.getDefinition(),
       TestWriterAgent.getDefinition(),
+      CodingAgent.getDefinition(),
       InitProjectAgent.getDefinition(),
       ImageGeneratorAgent.getDefinition(),
     ];
@@ -139,8 +141,6 @@ class AgentRegistry {
       const writeFile = await getTool('writeFile');
       const editFile = await getTool('editFile');
       const getSkill = await getTool('getSkill');
-      const exitPlanMode = await getTool('exitPlanMode');
-      const askUserQuestions = await getTool('askUserQuestions');
       const webSearch = await getTool('webSearch');
       const webFetch = await getTool('webFetch');
 
@@ -155,8 +155,6 @@ class AgentRegistry {
         writeFile,
         editFile,
         getSkill,
-        exitPlanMode,
-        askUserQuestions,
         webSearch,
         webFetch,
       })) as AgentToolSet;
@@ -176,8 +174,6 @@ class AgentRegistry {
       const writeFile = await getTool('writeFile');
       const editFile = await getTool('editFile');
       const getSkill = await getTool('getSkill');
-      const exitPlanMode = await getTool('exitPlanMode');
-      const askUserQuestions = await getTool('askUserQuestions');
       const webSearch = await getTool('webSearch');
       const webFetch = await getTool('webFetch');
 
@@ -192,8 +188,6 @@ class AgentRegistry {
         writeFile,
         editFile,
         getSkill,
-        exitPlanMode,
-        askUserQuestions,
         webSearch,
         webFetch,
       } as AgentToolSet;

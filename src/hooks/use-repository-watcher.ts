@@ -9,6 +9,31 @@ import { useRepositoryStore } from '@/stores/repository-store';
 const GIT_STATUS_DEBOUNCE_DELAY = 300; // ms
 const FILE_TREE_DEBOUNCE_DELAY = 200; // ms
 
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const normalizeFileSystemPaths = (payload: unknown): string[] => {
+  if (Array.isArray(payload)) {
+    return payload.filter(isNonEmptyString);
+  }
+
+  if (isNonEmptyString(payload)) {
+    return [payload];
+  }
+
+  if (payload && typeof payload === 'object') {
+    const record = payload as { path?: unknown; paths?: unknown };
+    if (Array.isArray(record.paths)) {
+      return record.paths.filter(isNonEmptyString);
+    }
+    if (isNonEmptyString(record.path)) {
+      return [record.path];
+    }
+  }
+
+  return [];
+};
+
 /**
  * Hook to set up file system watching for the currently open repository
  * This should be called in components that need to monitor file system changes
@@ -85,19 +110,22 @@ export function useRepositoryWatcher() {
 
     // Listen for file system changes
     const unlistenFileSystem = listen('file-system-changed', (event) => {
-      // Intelligently invalidate cache for changed paths
-      const payload = event.payload as { path?: string };
-      if (payload?.path) {
-        fastDirectoryTreeService.invalidatePath(payload.path);
+      const changedPaths = normalizeFileSystemPaths(event.payload);
 
-        // If the changed file is currently open, refresh its content
+      if (changedPaths.length > 0) {
+        const uniquePaths = Array.from(new Set(changedPaths));
         const { openFiles, handleExternalFileChange } = useRepositoryStore.getState();
-        const changedFilePath = payload.path;
-        const isFileOpen = openFiles.some((file) => file.path === changedFilePath);
-        if (isFileOpen) {
-          setTimeout(() => {
-            handleExternalFileChange(changedFilePath);
-          }, 100);
+        const openFilePaths = new Set(openFiles.map((file) => file.path));
+
+        for (const changedPath of uniquePaths) {
+          fastDirectoryTreeService.invalidatePath(changedPath);
+
+          // If the changed file is currently open, refresh its content
+          if (openFilePaths.has(changedPath)) {
+            setTimeout(() => {
+              handleExternalFileChange(changedPath);
+            }, 100);
+          }
         }
       }
 

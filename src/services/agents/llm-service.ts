@@ -33,7 +33,6 @@ import type {
   UIMessage,
 } from '../../types/agent';
 import { aiPricingService } from '../ai/ai-pricing-service';
-import { buildOpenAIProviderOptions } from './openai-provider-options';
 
 /**
  * Callbacks for agent loop
@@ -57,15 +56,15 @@ export interface AgentLoopCallbacks {
 }
 
 import { useProviderStore } from '@/providers/stores/provider-store';
+import { ContextCompactor } from '../context/context-compactor';
 import { fileService } from '../file-service';
-import { MessageCompactor } from '../message-compactor';
 import { taskFileService } from '../task-file-service';
 import { ErrorHandler } from './error-handler';
 import { StreamProcessor } from './stream-processor';
 import { ToolExecutor } from './tool-executor';
 
 export class LLMService {
-  private readonly messageCompactor: MessageCompactor;
+  private readonly messageCompactor: ContextCompactor;
   private readonly toolExecutor: ToolExecutor;
   private readonly errorHandler: ErrorHandler;
   /** Task ID for this LLM service instance (used for parallel task execution) */
@@ -103,7 +102,7 @@ export class LLMService {
    */
   constructor(taskId: string) {
     this.taskId = taskId;
-    this.messageCompactor = new MessageCompactor(this);
+    this.messageCompactor = new ContextCompactor();
     this.toolExecutor = new ToolExecutor();
     this.errorHandler = new ErrorHandler();
   }
@@ -583,13 +582,9 @@ export class LLMService {
                 providerOptionsMap.anthropic = {
                   thinking: { type: 'enabled', budgetTokens: 12_000 },
                 };
-              }
-
-              if (!isImageGenerator) {
-                providerOptionsMap.openai = buildOpenAIProviderOptions({
-                  enableReasoning: enableReasoningOptions,
-                  systemPrompt,
-                });
+                providerOptionsMap.openai = {
+                  reasoningEffort: 'medium',
+                };
               }
 
               // biome-ignore lint/suspicious/noExplicitAny: providerOptions type varies by provider
@@ -604,6 +599,7 @@ export class LLMService {
                   delayInMs: 30, // optional: defaults to 10ms
                   chunking: 'line', // optional: defaults to 'word'
                 }),
+                maxOutputTokens: 64000,
                 providerOptions,
                 onFinish: async ({ finishReason, usage, steps, totalUsage, response, request }) => {
                   const requestDuration = Date.now() - requestStartTime;
@@ -672,7 +668,6 @@ export class LLMService {
                     finishReason,
                     requestDuration,
                     totalUsage: totalUsage,
-                    usage: usage,
                     lastRequestTokens: loopState.lastRequestTokens,
                     steps: filteredSteps,
                     request: request

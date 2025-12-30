@@ -8,6 +8,14 @@ vi.mock('@/services/notification-service', () => ({
   },
 }));
 
+// Mock TaskManager - create a proper mock object
+vi.mock('@/services/task-manager', () => ({
+  TaskManager: {
+    getTaskSettings: vi.fn().mockResolvedValue(null),
+    updateTaskSettings: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 // Create a mock store that works both as a hook and with getState()
 vi.mock('@/stores/edit-review-store', () => {
   const mockPendingEdits = new Map();
@@ -49,7 +57,10 @@ const testContext = { taskId: 'conv-123' };
 
 describe('writeFile tool', () => {
   const mockRepositoryService = repositoryService as any;
-  const mockTaskManager = TaskManager as any;
+  const mockTaskManager = TaskManager as typeof TaskManager & {
+    getTaskSettings: ReturnType<typeof vi.fn>;
+    updateTaskSettings: ReturnType<typeof vi.fn>;
+  };
   const mockNotificationService = notificationService as any;
 
   const getMockStoreState = () => {

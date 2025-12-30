@@ -16,14 +16,6 @@ vi.mock('@/services/skills/file-based-skill-service', () => ({
   getFileBasedSkillService: vi.fn(),
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
 
 describe('useSkills', () => {
   const mockSkills: Skill[] = [

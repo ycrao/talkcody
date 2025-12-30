@@ -3,19 +3,13 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+
+// Mock logger FIRST before any imports that may use it
+
 import { createLLMService, type LLMService } from '@/services/agents/llm-service';
 import type { UIMessage } from '@/types/agent';
 
 // Mock dependencies
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    trace: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
 
 vi.mock('@/providers/models/model-service', () => ({
   modelService: { isModelAvailableSync: vi.fn(() => true) },

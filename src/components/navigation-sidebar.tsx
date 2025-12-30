@@ -1,15 +1,5 @@
 import { open } from '@tauri-apps/plugin-shell';
-import {
-  Bot,
-  Files,
-  FileText,
-  FolderOpen,
-  Github,
-  MessageSquare,
-  Server,
-  Settings,
-  Zap,
-} from 'lucide-react';
+import { Bot, FileText, FolderOpen, Github, Server, Settings, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLocale } from '@/hooks/use-locale';
@@ -28,15 +18,9 @@ export function NavigationSidebar({ activeView, onViewChange }: NavigationSideba
   const navigationItems = [
     {
       id: NavigationView.EXPLORER,
-      icon: Files,
+      icon: FolderOpen,
       label: t.Navigation.explorer,
       tooltip: `${t.Navigation.explorerTooltip}`,
-    },
-    {
-      id: NavigationView.CHAT,
-      icon: MessageSquare,
-      label: t.Navigation.chat,
-      tooltip: `${t.Navigation.chatTooltip}`,
     },
     {
       id: NavigationView.PROJECTS,

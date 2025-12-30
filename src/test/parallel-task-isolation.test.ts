@@ -1,17 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Mock logger FIRST before any imports that may use it
+
 import { useEditReviewStore, type PendingEdit } from '@/stores/edit-review-store';
 import { useWorktreeStore } from '@/stores/worktree-store';
 import type { WorktreeInfo } from '@/types/worktree';
-
-// Mock logger to avoid console noise
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    debug: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
 
 // Mock workspace-root-service
 vi.unmock('@/services/workspace-root-service');

@@ -3,7 +3,8 @@
 // Reference: opencode-openai-codex-auth/lib/request/request-transformer.ts
 
 import { logger } from '@/lib/logger';
-import { getCodexInstructions } from './codex-instructions-service';
+
+import codexInstructions from './codex-instructions.md?raw';
 
 /**
  * Input item type for Codex API
@@ -44,62 +45,24 @@ export interface CodexRequestBody {
   prompt_cache_key?: string;
 }
 
-/**
- * Normalize model name to Codex-supported variants
- *
- * For OpenAI OAuth (ChatGPT Plus/Pro), all models are mapped to their Codex variants
- * to ensure proper tool usage and code task handling.
- *
- * Mapping:
- * - gpt-5.2 → gpt-5.2-codex
- * - gpt-5.1 → gpt-5.1-codex
- * - gpt-5 → gpt-5.1-codex
- */
 export function normalizeModel(model: string | undefined): string {
-  if (!model) return 'gpt-5.1-codex';
+  if (!model) return 'gpt-5.2-codex';
 
   // Strip provider prefix if present (e.g., "openai/gpt-5-codex" → "gpt-5-codex")
   const modelId = model.includes('/') ? (model.split('/').pop() ?? model) : model;
   const normalized = modelId.toLowerCase();
 
-  // Priority order for pattern matching (most specific first):
-  // Codex variants - keep as-is
-  if (normalized.includes('gpt-5.2-codex') || normalized.includes('gpt 5.2 codex')) {
-    return 'gpt-5.2-codex';
-  }
   if (normalized.includes('gpt-5.1-codex-max') || normalized.includes('gpt 5.1 codex max')) {
     return 'gpt-5.1-codex-max';
   }
   if (normalized.includes('gpt-5.1-codex-mini') || normalized.includes('gpt 5.1 codex mini')) {
     return 'gpt-5.1-codex-mini';
   }
-  if (
-    normalized.includes('codex-mini-latest') ||
-    normalized.includes('gpt-5-codex-mini') ||
-    normalized.includes('gpt 5 codex mini')
-  ) {
-    return 'codex-mini-latest';
-  }
   if (normalized.includes('gpt-5.1-codex') || normalized.includes('gpt 5.1 codex')) {
     return 'gpt-5.1-codex';
   }
-
-  // Non-Codex variants - map to Codex for better tool usage
-  if (normalized.includes('gpt-5.2') || normalized.includes('gpt 5.2')) {
-    return 'gpt-5.2-codex'; // Map gpt-5.2 → gpt-5.2-codex
-  }
-  if (normalized.includes('gpt-5.1') || normalized.includes('gpt 5.1')) {
-    return 'gpt-5.1-codex'; // Map gpt-5.1 → gpt-5.1-codex
-  }
-  if (normalized.includes('codex')) {
-    return 'gpt-5.1-codex';
-  }
-  if (normalized.includes('gpt-5') || normalized.includes('gpt 5')) {
-    return 'gpt-5.1-codex'; // Map gpt-5 → gpt-5.1-codex
-  }
-
   // Default fallback - use Codex for best tool support
-  return 'gpt-5.1-codex';
+  return 'gpt-5.2-codex';
 }
 
 /**
@@ -118,7 +81,6 @@ export function getReasoningConfig(modelName: string | undefined): ReasoningConf
     normalizedName.includes('codex-mini') ||
     normalizedName.includes('codex mini') ||
     normalizedName.includes('codex-mini-latest');
-  const _isCodex = normalizedName.includes('codex') && !isCodexMini;
 
   // GPT 5.2, GPT 5.2 Codex, and Codex Max support xhigh reasoning
   const supportsXhigh = isGpt52General || isGpt52Codex || isCodexMax;
@@ -185,51 +147,59 @@ You are running Codex through TalkCody, a cross-platform coding assistant. TalkC
 <critical_rule priority="0">
 ❌ UPDATE_PLAN DOES NOT EXIST → ✅ USE "todowrite" INSTEAD
 - NEVER use: update_plan, updatePlan, read_plan, readPlan
-- ALWAYS use: todowrite for task/plan updates, todoread to read plans
+- ALWAYS use: todowrite for task/plan updates
 - Before plan operations: Verify you're using "todowrite", NOT "update_plan"
 </critical_rule>
 
 ## Available TalkCody Tools
 
 **File Operations:**
-- \`write\` - Create new files
-- \`edit\` - Modify existing files (REPLACES apply_patch)
-- \`read\` - Read file contents
+- \`writeFile\` - Create new files
+- \`editFile\` - Modify existing files (REPLACES apply_patch)
+- \`readFile\` - Read file contents
 
 **Search/Discovery:**
-- \`grep\` - Search file contents
+- \`codeSearch\` - Search file contents
 - \`glob\` - Find files by pattern
-- \`list\` - List directories
+- \`listFiles\` - List directories
 
 **Execution:**
 - \`bash\` - Run shell commands
 
 **Network:**
-- \`webfetch\` - Fetch web content
+- \`webFetch\` - Fetch web content
+- \`webSearch\` - Search the web
 
 **Task Management:**
 - \`todowrite\` - Manage tasks/plans (REPLACES update_plan)
-- \`todoread\` - Read current plan
 
-## Substitution Rules
+**Plan Management:**
+- \`exitPlanMode\` - Exit plan mode and return to normal context
+- \`askUserQuestions\` - Ask user clarifying questions
 
-Base instruction says:    You MUST use instead:
-apply_patch           →   edit
-update_plan           →   todowrite
-read_plan             →   todoread
+**Call Subagent:**
+- \`callAgent\` - Invoke a subagent for specialized tasks
+- you could call "explore" agent to explore and gather more information about a specific topic.
+- you could call "plan" agent to create and manage plans.
 
-## Verification Checklist
+## TalkCody Working Style
 
-Before file/plan modifications:
-1. Am I using "edit" NOT "apply_patch"?
-2. Am I using "todowrite" NOT "update_plan"?
-3. Is this tool in the approved list above?
+**Communication:**
+- Send brief preambles (8-12 words) before tool calls, building on prior context
+- Provide progress updates during longer tasks
 
-If ANY answer is NO → STOP and correct before proceeding.
+**Execution:**
+- Keep working autonomously until query is fully resolved before yielding
+- Don't return to user with partial solutions
 
-## What Remains from Codex
+**Code Approach:**
+- New projects: Be ambitious and creative
+- Existing codebases: Surgical precision - modify only what's requested unless explicitly instructed to do otherwise
 
-Sandbox policies, approval mechanisms, and file reference formats all follow Codex instructions.`;
+**Testing:**
+- If tests exist: Start specific to your changes, then broader validation
+
+`;
 
 /**
  * Add TalkCody bridge message to input if tools are present
@@ -265,10 +235,7 @@ export async function transformRequestBody(body: CodexRequestBody): Promise<Code
   const originalModel = body.model;
   const normalizedModel = normalizeModel(body.model);
 
-  logger.debug(`[CodexTransformer] Transforming request: ${originalModel} → ${normalizedModel}`);
-
-  // Get Codex instructions for this model family
-  const codexInstructions = await getCodexInstructions(normalizedModel);
+  logger.info(`[CodexTransformer] Transforming request: ${originalModel} → ${normalizedModel}`);
 
   // Normalize model name for API call
   body.model = normalizedModel;
@@ -284,38 +251,6 @@ export async function transformRequestBody(body: CodexRequestBody): Promise<Code
 
     // Add bridge message for tool awareness
     body.input = addBridgeMessage(body.input, !!body.tools);
-
-    // Handle orphaned function_call_output items
-    if (body.input) {
-      const functionCallIds = new Set(
-        body.input
-          .filter((item) => item.type === 'function_call' && item.call_id)
-          .map((item) => item.call_id)
-      );
-
-      body.input = body.input.map((item) => {
-        if (item.type === 'function_call_output' && !functionCallIds.has(item.call_id)) {
-          // Convert orphaned output to message to preserve context
-          const toolName = typeof item.name === 'string' ? item.name : 'tool';
-          const callId = item.call_id ?? '';
-          let text: string;
-          try {
-            text = typeof item.output === 'string' ? item.output : JSON.stringify(item.output);
-          } catch {
-            text = String(item.output ?? '');
-          }
-          if (text.length > 16000) {
-            text = `${text.slice(0, 16000)}\n...[truncated]`;
-          }
-          return {
-            type: 'message',
-            role: 'assistant',
-            content: `[Previous ${toolName} result; call_id=${callId}]: ${text}`,
-          } as InputItem;
-        }
-        return item;
-      });
-    }
   }
 
   // Configure reasoning
@@ -338,7 +273,7 @@ export async function transformRequestBody(body: CodexRequestBody): Promise<Code
   body.max_output_tokens = undefined;
   body.max_completion_tokens = undefined;
 
-  logger.debug('[CodexTransformer] Request transformed', {
+  logger.info('[CodexTransformer] Request transformed', {
     model: body.model,
     hasInstructions: !!body.instructions,
     inputCount: body.input?.length,
@@ -346,19 +281,4 @@ export async function transformRequestBody(body: CodexRequestBody): Promise<Code
   });
 
   return body;
-}
-
-/**
- * Check if a model requires Codex transformation (ChatGPT OAuth models)
- */
-export function isCodexModel(model: string | undefined): boolean {
-  if (!model) return false;
-  const lower = model.toLowerCase();
-  return (
-    lower.includes('gpt-5') ||
-    lower.includes('codex') ||
-    lower.includes('gpt 5') ||
-    lower.includes('gpt-5.1') ||
-    lower.includes('gpt-5.2')
-  );
 }

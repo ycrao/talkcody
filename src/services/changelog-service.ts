@@ -20,6 +20,36 @@ export interface ChangelogEntry {
 // Only include the most recent versions that users care about
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.2.2',
+    date: '2025-12-30',
+    en: {
+      added: ['Unified Explore page and Chat page for a more coherent user experience.'],
+      changed: [
+        'Improved message filtering and compaction logic to better support Long Run Tasks.',
+        'Optimized prompts for use via OpenAI subscriptions.',
+        'Improved timeout handling when calling sub-agents.',
+      ],
+      fixed: [
+        'Resolved a bug in GitHub Copilot provider when handling image requests.',
+        'Fixed an issue where the editor could not perceive external file modifications in a timely manner.',
+        'Fixed a bug where the Diff display was incorrect for large files in the Edit File result UI.',
+      ],
+    },
+    zh: {
+      added: ['将 Explore 页面和 Chat 页面统一，提供更连贯的用户体验'],
+      changed: [
+        '改进消息过滤和压缩逻辑，更好地支持长任务（Long Run Task）',
+        '优化通过 OpenAI 订阅使用的提示词',
+        '改进了调用子 Agent 时的超时处理机制',
+      ],
+      fixed: [
+        '解决了 GitHub Copilot provider 处理图片请求时的 Bug',
+        '修复了编辑器无法及时感知外部文件修改的问题',
+        '修复了 Edit File 结果 UI 在处理大文件时 Diff 显示不对的 Bug',
+      ],
+    },
+  },
+  {
     version: '0.2.1',
     date: '2025-12-27',
     en: {

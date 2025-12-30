@@ -18,13 +18,6 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 	writeTextFile: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/lib/logger', () => ({
-	logger: {
-		info: vi.fn(),
-		error: vi.fn(),
-		warn: vi.fn(),
-	},
-}));
 
 describe('ActiveSkillsConfigService', () => {
 	let mockExists: any;

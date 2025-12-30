@@ -2,26 +2,27 @@
 // Integration tests for MessageCompactor using MockLanguageModelV2 from AI SDK
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Mock dependencies FIRST
+const mockCompactContext = vi.hoisted(() => vi.fn());
+
+// Mock AI Context Compaction Service
+vi.mock('@/services/ai/ai-context-compaction', () => ({
+  aiContextCompactionService: {
+    compactContext: mockCompactContext,
+  },
+}));
+
 import { MockLanguageModelV2, simulateReadableStream } from 'ai/test';
 import type { ModelMessage } from 'ai';
 import * as aiModule from 'ai';
-import { LLMService } from '../services/agents/llm-service';
-import { MessageCompactor } from '../services/message-compactor';
-import type { CompressionConfig, UIMessage } from '../types/agent';
+import { LLMService } from '../agents/llm-service';
+import { ContextCompactor } from './context-compactor';
+import type { CompressionConfig, UIMessage } from '../../types/agent';
 
 // ============================================
 // MOCKS
 // ============================================
-
-vi.mock('../lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
 
 vi.mock('@/providers/stores/provider-store', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/providers/stores/provider-store')>();
@@ -49,53 +50,31 @@ vi.mock('@/providers/stores/provider-store', async (importOriginal) => {
   };
 });
 
-vi.mock('../stores/settings-store', () => ({
-  settingsManager: {
-    getCurrentRootPath: vi.fn().mockReturnValue('/test/path'),
-    getCurrentConversationId: vi.fn().mockReturnValue('test-conversation-id'),
-    getSync: vi.fn().mockReturnValue(undefined),
-    getBatchSync: vi.fn().mockReturnValue({}),
-  },
-  useSettingsStore: {
-    getState: vi.fn(() => ({
-      language: 'en',
-    })),
-  },
-}));
-
-vi.mock('../services/workspace-root-service', () => ({
+vi.mock('@/services/workspace-root-service', () => ({
   getValidatedWorkspaceRoot: vi.fn().mockResolvedValue('/test/path'),
   getEffectiveWorkspaceRoot: vi.fn().mockResolvedValue('/test/path'),
 }));
 
-vi.mock('../services/ai-pricing-service', () => ({
+vi.mock('@/services/ai-pricing-service', () => ({
   aiPricingService: {
     calculateCost: vi.fn().mockResolvedValue(0.001),
   },
 }));
 
-vi.mock('../services/conversation-manager', () => ({
+vi.mock('@/services/conversation-manager', () => ({
   ConversationManager: {
     updateConversationUsage: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
-vi.mock('../lib/llm-utils', () => ({
+vi.mock('@/lib/llm-utils', () => ({
   convertMessages: vi.fn().mockImplementation((messages) => Promise.resolve(messages || [])),
   formatReasoningText: vi
     .fn()
     .mockImplementation((text, isFirst) => (isFirst ? `\n<thinking>\n${text}` : text)),
 }));
 
-vi.mock('@/providers/config/model-config', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/providers/config/model-config')>();
-  return {
-    ...actual,
-    getContextLength: vi.fn().mockReturnValue(200000),
-  };
-});
-
-vi.mock('../stores/conversation-usage-store', () => ({
+vi.mock('@/stores/conversation-usage-store', () => ({
   useConversationUsageStore: {
     getState: vi.fn(() => ({
       addUsage: vi.fn(),
@@ -104,7 +83,7 @@ vi.mock('../stores/conversation-usage-store', () => ({
   },
 }));
 
-vi.mock('../stores/plan-mode-store', () => ({
+vi.mock('@/stores/plan-mode-store', () => ({
   usePlanModeStore: {
     getState: vi.fn(() => ({
       isPlanModeEnabled: false,
@@ -112,7 +91,7 @@ vi.mock('../stores/plan-mode-store', () => ({
   },
 }));
 
-vi.mock('../stores/file-changes-store', () => ({
+vi.mock('@/stores/file-changes-store', () => ({
   useFileChangesStore: {
     getState: vi.fn(() => ({
       clearConversation: vi.fn(),
@@ -130,7 +109,9 @@ vi.mock('ai', async (importOriginal) => {
   };
 });
 
+// Mock AI Context Compaction Service already defined at top
 // ============================================
+
 // HELPER FUNCTIONS
 // ============================================
 
@@ -344,7 +325,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
     vi.mocked(modelService.isModelAvailableSync).mockReturnValue(true);
     vi.mocked(modelService.getBestProviderForModelSync).mockReturnValue('test-provider');
 
-    const { convertMessages, formatReasoningText } = await import('../lib/llm-utils');
+    const { convertMessages, formatReasoningText } = await import('../../lib/llm-utils');
     vi.mocked(convertMessages).mockImplementation((messages) => Promise.resolve(messages || []));
     vi.mocked(formatReasoningText).mockImplementation((text, isFirst) =>
       isFirst ? `\n<thinking>\n${text}` : text
@@ -449,9 +430,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
   // ===========================================
   describe('Structured response parsing (8 sections)', () => {
     it('should parse all 8 compression sections correctly', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          const summary = `<analysis>Analyzing the conversation</analysis>
+      const summary = `<analysis>Analyzing the conversation</analysis>
 
 1. Primary Request and Intent: Test intent
 2. Key Technical Concepts: React, TypeScript
@@ -461,9 +440,10 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
 6. All user messages: User asked about testing
 7. Pending Tasks: Write more tests
 8. Current Work: Integration testing`;
-          callbacks.onComplete?.(summary);
-        },
-      });
+      
+      mockCompactContext.mockResolvedValueOnce(summary);
+      
+      const messageCompactor = new ContextCompactor();
 
       const result = await messageCompactor.compactMessages({
         messages: createModelMessages(4),
@@ -477,11 +457,9 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
     });
 
     it('should extract analysis tags from response', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('<analysis>This is the analysis</analysis>\n1. Section: content');
-        },
-      });
+      mockCompactContext.mockResolvedValueOnce('<analysis>This is the analysis</analysis>\n1. Section: content');
+      
+      const messageCompactor = new ContextCompactor();
 
       const result = await messageCompactor.compactMessages({
         messages: [{ role: 'user', content: 'Test' }, { role: 'assistant', content: 'Response' }],
@@ -494,11 +472,9 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
     });
 
     it('should handle malformed responses gracefully', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('This is just plain text without any sections');
-        },
-      });
+      mockCompactContext.mockResolvedValueOnce('This is just plain text without any sections');
+      
+      const messageCompactor = new ContextCompactor();
 
       const result = await messageCompactor.compactMessages({
         messages: createModelMessages(4),
@@ -546,11 +522,9 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
     });
 
     it('should update compression statistics', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('Summary');
-        },
-      });
+      mockCompactContext.mockResolvedValueOnce('Summary');
+      
+      const messageCompactor = new ContextCompactor();
 
       const initialStats = messageCompactor.getCompressionStats();
       expect(initialStats.totalCompressions).toBe(0);
@@ -705,15 +679,12 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
   // ===========================================
   describe('Timeout and abort handling', () => {
     it('should pass abort controller through compression flow', async () => {
-      // MessageCompactor receives AbortController as second argument
+      // MessageCompactor receives AbortController as third argument
       const abortController = new AbortController();
 
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks, controller) => {
-          // Verify controller is passed (may be undefined if not needed)
-          callbacks.onComplete?.('Summary');
-        },
-      });
+      mockCompactContext.mockResolvedValueOnce('Summary');
+      
+      const messageCompactor = new ContextCompactor();
 
       // The compactMessages method accepts lastTokenCount as second param and abortController as third param
       await messageCompactor.compactMessages(
@@ -729,18 +700,12 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
       expect(true).toBe(true);
     });
 
-    it('should handle compression errors from runAgentLoop', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          // Simulate an error by calling onError callback
-          // This triggers performCompression's promise rejection
-          setTimeout(() => {
-            callbacks.onError?.(new Error('Compression failed'));
-          }, 0);
-        },
-      });
+    it('should handle compression errors from AI service', async () => {
+      mockCompactContext.mockRejectedValueOnce(new Error('Compression failed'));
+      
+      const messageCompactor = new ContextCompactor();
 
-      // The performCompression method now returns a fallback result when onError is called
+      // The AI service error triggers fallback behavior
       const result = await messageCompactor.compactMessages({
         messages: createModelMessages(4),
         config: createCompressionConfig({ preserveRecentMessages: 1 }),
@@ -758,11 +723,9 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
   // ===========================================
   describe('Multiple compression cycles', () => {
     it('should handle consecutive compressions correctly', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('Compression summary cycle');
-        },
-      });
+      mockCompactContext.mockResolvedValue('Compression summary cycle');
+      
+      const messageCompactor = new ContextCompactor();
 
       // First compression
       const result1 = await messageCompactor.compactMessages({
@@ -804,11 +767,7 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
     });
 
     it('should handle summary as user message on repeated compression', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('New summary from second compression');
-        },
-      });
+      const messageCompactor = new ContextCompactor();
 
       // Test the createCompressedMessages method directly with a manually constructed
       // CompressionResult that has an old user summary in preservedMessages
@@ -847,11 +806,9 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
     });
 
     it('should update compression statistics across cycles', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('Summary');
-        },
-      });
+      mockCompactContext.mockResolvedValue('Summary');
+      
+      const messageCompactor = new ContextCompactor();
 
       const initialStats = messageCompactor.getCompressionStats();
       expect(initialStats.totalCompressions).toBe(0);
@@ -882,11 +839,9 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
   // ===========================================
   describe('Tool message handling in compression', () => {
     it('should preserve tool-call/tool-result pairs when compressing', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('Summary with tool calls');
-        },
-      });
+      mockCompactContext.mockResolvedValueOnce('Summary with tool calls');
+      
+      const messageCompactor = new ContextCompactor();
 
       const messagesWithTools = createMessagesWithToolCalls();
 
@@ -910,11 +865,9 @@ describe('MessageCompactor Integration Tests with MockLanguageModelV2', () => {
     });
 
     it('should adjust preserve boundary to keep tool pairs together', async () => {
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('Summary');
-        },
-      });
+      mockCompactContext.mockResolvedValueOnce('Summary');
+      
+      const messageCompactor = new ContextCompactor();
 
       const messages: ModelMessage[] = [
         { role: 'user', content: 'Request 1' },
@@ -999,16 +952,7 @@ The user engaged in a conversation about testing the MessageCompactor.
     });
 
     it('should handle compression with shouldCompress check', async () => {
-      // Re-establish the getContextLength mock to ensure it returns 200000
-      const { getContextLength } = await import('@/providers/config/model-config');
-      vi.mocked(getContextLength).mockReturnValue(200000);
-
-      const messageCompactor = new MessageCompactor({
-        runAgentLoop: async (_options, callbacks) => {
-          callbacks.onComplete?.('Compression complete');
-        },
-      });
-
+      const messageCompactor = new ContextCompactor();
       // Config with threshold 0.7 means compress when > 70% of context (140k)
       const config = createCompressionConfig({ compressionThreshold: 0.7 });
 

@@ -15,6 +15,8 @@ vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
     success: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -61,15 +63,6 @@ vi.mock('@/hooks/use-locale', () => ({
   }),
 }));
 
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
-
 const mockExists = vi.mocked(exists);
 const mockToastError = vi.mocked(toast.error);
 
@@ -92,6 +85,7 @@ describe('EmptyRepositoryState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockProjects = [];
+    mockToastError.mockClear();
   });
 
   it('should render import button', async () => {

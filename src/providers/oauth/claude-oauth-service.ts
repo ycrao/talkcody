@@ -258,9 +258,8 @@ function createClaudeOAuthFetch(): FetchFn {
 /**
  * Create an Anthropic provider that uses OAuth authentication
  * The provider will automatically refresh tokens on each request
- * @deprecated accessToken parameter - token is now dynamically fetched
  */
-export function createAnthropicOAuthProvider(_accessToken?: string) {
+export function createAnthropicOAuthProvider() {
   return createAnthropic({
     apiKey: 'oauth-placeholder', // SDK requires this but we override with Bearer token
     fetch: createClaudeOAuthFetch() as typeof fetch,

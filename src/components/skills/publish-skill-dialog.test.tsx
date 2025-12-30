@@ -14,7 +14,10 @@ vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
   },
+  Toaster: vi.fn(),
 }));
 
 const mockSkill: Skill = {
@@ -222,7 +225,7 @@ describe('PublishSkillDialog', () => {
     });
 
     // Find the badge containing 'newtag' and click its remove button
-    const badge = screen.getByText('newtag').closest('span[data-slot="badge"]');
+    const badge = screen.getByText('newtag').closest('span[data-slot=\"badge\"]');
     expect(badge).toBeInTheDocument();
 
     const removeButton = badge?.querySelector('button');

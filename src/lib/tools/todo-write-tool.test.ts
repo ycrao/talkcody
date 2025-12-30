@@ -1,8 +1,12 @@
-import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { todoWriteTool } from './todo-write-tool';
 
 // Mock dependencies
+vi.mock('@/stores/settings-store', () => ({
+  settingsManager: {
+    getCurrentTaskId: vi.fn(),
+  },
+}));
+
 vi.mock('@/services/file-todo-service', () => ({
   fileTodoService: {
     getTodosByConversation: vi.fn(),
@@ -10,34 +14,20 @@ vi.mock('@/services/file-todo-service', () => ({
   },
 }));
 
-vi.mock('@/stores/settings-store', () => ({
-  settingsManager: {
-    getCurrentTaskId: vi.fn(),
-  },
-}));
-
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    trace: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
+import { render, screen } from '@testing-library/react';
+import { todoWriteTool } from './todo-write-tool';
 import { logger } from '@/lib/logger';
 import { settingsManager } from '@/stores/settings-store';
 import { fileTodoService } from '@/services/file-todo-service';
 
 const mockFileTodoService = fileTodoService as any;
-const mockSettingsManager = settingsManager as any;
+const mockSettingsManagerInstance = settingsManager as any;
 const mockLogger = logger as any;
 
 describe('todoWriteTool', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSettingsManager.getCurrentTaskId.mockReturnValue('test-task-id');
+    mockSettingsManagerInstance.getCurrentTaskId.mockReturnValue('test-task-id');
   });
 
   afterEach(() => {
@@ -255,7 +245,7 @@ describe('todoWriteTool', () => {
 
   describe('error handling', () => {
     it('should handle missing task ID', async () => {
-      mockSettingsManager.getCurrentTaskId.mockReturnValue(null);
+      mockSettingsManagerInstance.getCurrentTaskId.mockReturnValue(null);
 
       const input = {
         todos: [

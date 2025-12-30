@@ -13,21 +13,14 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+// Mock logger FIRST before any imports that may use it
+
 import type { UIMessage, ToolMessageContent } from '@/types/agent';
 import type { StoredMessage } from '@/services/database-service';
 import type { StoredToolContent } from '@/types';
 import { mapStoredToUIMessage } from '@/lib/message-mapper';
 import { convertMessages } from '@/lib/llm-utils';
-
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
 
 describe('Tool-call message persistence bug fix', () => {
   beforeEach(() => {

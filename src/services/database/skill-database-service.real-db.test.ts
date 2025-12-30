@@ -9,17 +9,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SkillDatabaseService } from './skill-database-service';
 import { TestDatabaseAdapter } from '@/test/infrastructure/adapters/test-database-adapter';
 import type { Skill } from '@/types/skill';
+import { mockLogger } from '@/test/mocks';
 
-// Mock only logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
+vi.mock('@/lib/logger', () => mockLogger);
 
 const createTestSkill = (overrides: Partial<Skill> = {}): Skill => ({
   id: `skill-${Date.now()}-${Math.random().toString(36).slice(2)}`,

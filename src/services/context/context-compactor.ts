@@ -6,20 +6,17 @@ import {
 } from '@/lib/message-convert';
 import { validateAnthropicMessages } from '@/lib/message-validate';
 import { timedMethod } from '@/lib/timer';
-import { GEMINI_25_FLASH_LITE, getContextLength } from '@/providers/config/model-config';
-import { useProviderStore } from '@/providers/stores/provider-store';
+import { getContextLength } from '@/providers/config/model-config';
 import type {
-  AgentLoopCallbacks,
-  AgentLoopOptions,
   CompressionConfig,
   CompressionResult,
   CompressionSection,
   MessageCompactionOptions,
-  UIMessage,
 } from '@/types/agent';
-import { MessageFilter } from './agents/message-filter';
-import { MessageRewriter } from './agents/message-rewriter';
-import { estimateTokens } from './code-navigation-service';
+import { aiContextCompactionService } from '../ai/ai-context-compaction';
+import { estimateTokens } from '../code-navigation-service';
+import { ContextFilter } from './context-filter';
+import { ContextRewriter } from './context-rewriter';
 
 export interface ValidationResult {
   valid: boolean;
@@ -36,48 +33,20 @@ export interface SelectMessagesToCompressResult {
   originalSystemMessage: ModelMessage | null;
 }
 
-export class MessageCompactor {
-  private readonly COMPRESSION_TIMEOUT_MS = 180000;
+export class ContextCompactor {
   private readonly MAX_SUMMARY_LENGTH = 8000; // Max chars for condensed summary
   private readonly PRESERVE_TOOL_NAMES = ['exitPlanMode', 'todoWrite'];
-  private messageFilter: MessageFilter;
-  private messageRewriter: MessageRewriter;
+  private messageFilter: ContextFilter;
+  private messageRewriter: ContextRewriter;
   private compressionStats = {
     totalCompressions: 0,
     totalTimeSaved: 0,
     averageCompressionRatio: 0,
   };
 
-  private static readonly COMPRESSION_PROMPT =
-    `Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
-This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
-
-Before providing your final summary, wrap your analysis in <analysis> tags to organize your thoughts and ensure you've covered all necessary points.
-
-Your summary should include the following sections:
-
-1. Primary Request and Intent: Capture all of the user's explicit requests and intents in detail
-2. Key Technical Concepts: List all important technical concepts, technologies, and frameworks discussed.
-3. Files and Code Sections: Enumerate specific files and code sections examined, modified, or created. Pay special attention to the most recent messages and include full code snippets where applicable.
-4. Errors and fixes: List all errors that you ran into, and how you fixed them. Pay special attention to specific user feedback.
-5. Problem Solving: Document problems solved and any ongoing troubleshooting efforts.
-6. All user messages: List ALL user messages that are not tool results. These are critical for understanding the users' feedback and changing intent.
-7. Pending Tasks: Outline any pending tasks that you have explicitly been asked to work on.
-8. Current Work: Describe in detail precisely what was being worked on immediately before this summary request.
-
-Please be comprehensive and technical in your summary. Include specific file paths, function names, error messages, and code patterns that would be essential for maintaining context.`;
-
-  constructor(
-    private llmService: {
-      runAgentLoop: (
-        options: AgentLoopOptions,
-        callbacks: AgentLoopCallbacks,
-        abortController?: AbortController
-      ) => Promise<void>;
-    }
-  ) {
-    this.messageFilter = new MessageFilter();
-    this.messageRewriter = new MessageRewriter();
+  constructor() {
+    this.messageFilter = new ContextFilter();
+    this.messageRewriter = new ContextRewriter();
   }
 
   /**
@@ -412,10 +381,10 @@ Please be comprehensive and technical in your summary. Include specific file pat
     // Perform compression using the configured model
     let compressedSummary = '';
     try {
-      compressedSummary = await this.performCompression(
+      compressedSummary = await aiContextCompactionService.compactContext(
         conversationHistory,
         config.compressionModel,
-        abortController
+        abortController?.signal
       );
     } catch (error) {
       logger.warn('AI compression failed, falling back to tree-sitter rewriting:', error);
@@ -490,117 +459,6 @@ Please be comprehensive and technical in your summary. Include specific file pat
         return `${role}: ${content}`;
       })
       .join('\n\n');
-  }
-
-  private getAvailableModelForCompression(preferredModel: string): string | null {
-    if (useProviderStore.getState().isModelAvailable(preferredModel)) {
-      return preferredModel;
-    }
-
-    const models = useProviderStore.getState().availableModels;
-    if (models.length === 0) {
-      return null;
-    }
-
-    const modelsWithPricing = models.filter((m) => m.inputPricing !== undefined);
-    if (modelsWithPricing.length === 0) {
-      return null;
-    }
-
-    const sorted = modelsWithPricing.sort((a, b) => {
-      const contextA = getContextLength(a.key);
-      const contextB = getContextLength(b.key);
-
-      if (contextA !== contextB) {
-        return contextB - contextA;
-      }
-
-      const priceA = Number.parseFloat(a.inputPricing ?? 'Infinity') || 0;
-      const priceB = Number.parseFloat(b.inputPricing ?? 'Infinity') || 0;
-      return priceA - priceB;
-    });
-
-    if (sorted.length > 0) {
-      const fallback = sorted[0]!; // Type assertion safe due to length check
-      logger.info(
-        `[Compression] Preferred model ${preferredModel} not available, using fallback: ${fallback.key}@${fallback.provider} (context: ${getContextLength(fallback.key)}, price: ${fallback.inputPricing})`
-      );
-      return `${fallback.key}@${fallback.provider}`;
-    }
-
-    return null;
-  }
-
-  private async performCompression(
-    conversationHistory: string,
-    model: string,
-    abortController?: AbortController
-  ): Promise<string> {
-    const availableModel = this.getAvailableModelForCompression(model || GEMINI_25_FLASH_LITE);
-
-    if (!availableModel) {
-      throw new Error(
-        'No available model for compression. Please configure an API key in settings.'
-      );
-    }
-
-    return new Promise<string>((resolve, reject) => {
-      let compressedText = '';
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-      // Set up timeout
-      timeoutId = setTimeout(() => {
-        const timeoutError = new Error(
-          `Compression timeout after ${this.COMPRESSION_TIMEOUT_MS}ms`
-        );
-        logger.error('Compression timeout', timeoutError);
-        reject(timeoutError);
-      }, this.COMPRESSION_TIMEOUT_MS);
-
-      const history = `CONVERSATION HISTORY TO SUMMARIZE:
-${conversationHistory}
-
-Please provide a comprehensive structured summary following the 8-section format above.`;
-
-      const compressionMessages: UIMessage[] = [
-        {
-          id: 'compression-request',
-          role: 'user',
-          content: history,
-          timestamp: new Date(),
-        },
-      ];
-
-      this.llmService.runAgentLoop(
-        {
-          messages: compressionMessages,
-          model: availableModel,
-          systemPrompt: MessageCompactor.COMPRESSION_PROMPT,
-          tools: {}, // No tools needed for compression
-          maxIterations: 1, // Single response for compression
-          suppressReasoning: true,
-          isThink: false,
-        },
-        {
-          onChunk: (chunk: string) => {
-            compressedText += chunk;
-          },
-          onComplete: (fullText: string) => {
-            if (timeoutId) clearTimeout(timeoutId);
-            resolve(fullText || compressedText);
-          },
-          onError: (error: Error) => {
-            if (timeoutId) clearTimeout(timeoutId);
-            logger.error('Message compression failed:', error);
-            reject(error);
-          },
-          onStatus: (status: string) => {
-            logger.debug('Compression status:', status);
-          },
-        },
-        abortController
-      );
-    });
   }
 
   private parseSections(compressedSummary: string): CompressionSection[] {
@@ -771,7 +629,7 @@ Please provide a comprehensive structured summary following the 8-section format
     }
 
     // Fallback: truncate with ellipsis
-    return summary.slice(0, this.MAX_SUMMARY_LENGTH) + '...';
+    return `${summary.slice(0, this.MAX_SUMMARY_LENGTH)}...`;
   }
 
   public createCompressedMessages(result: CompressionResult): ModelMessage[] {

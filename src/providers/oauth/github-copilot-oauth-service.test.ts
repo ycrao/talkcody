@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockLogger } from '@/test/mocks';
 import {
   createGitHubCopilotFetch,
   isVisionRequest,
@@ -9,15 +10,6 @@ const mockStreamFetch = vi.fn();
 const mockGetGitHubCopilotOAuthToken = vi.fn();
 
 // Mock dependencies
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
-
 vi.mock('@/lib/tauri-fetch', () => ({
   streamFetch: (...args: unknown[]) => mockStreamFetch(...args),
 }));

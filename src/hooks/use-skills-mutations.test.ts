@@ -13,12 +13,6 @@ vi.mock('@/services/skills/file-based-skill-service', () => ({
 }));
 
 // Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-  },
-}));
 
 // Mock database service
 vi.mock('@/services/database-service', () => ({
@@ -28,9 +22,18 @@ vi.mock('@/services/database-service', () => ({
 }));
 
 // Mock skill database service
-vi.mock('@/services/database/skill-database-service', () => ({
-  SkillDatabaseService: vi.fn(),
-}));
+vi.mock('@/services/database/skill-database-service', () => {
+  // Define a class that can be instantiated
+  class MockSkillDatabaseService {
+    getSkillById = vi.fn();
+    updateSkill = vi.fn();
+    deleteSkill = vi.fn();
+    listSkills = vi.fn();
+  }
+  return {
+    SkillDatabaseService: MockSkillDatabaseService,
+  };
+});
 
 // Mock fork skill service
 vi.mock('@/services/skills/fork-skill', () => ({
@@ -406,12 +409,8 @@ describe('useSkillMutations', () => {
   describe('forkSkill', () => {
     it('should fork a skill successfully', async () => {
       const mockDb = {};
-      const mockDbService = {};
 
       vi.mocked(databaseServiceModule.databaseService.getDb).mockResolvedValue(mockDb as any);
-      vi.mocked(skillDatabaseServiceModule.SkillDatabaseService).mockImplementation(
-        () => mockDbService as any
-      );
       vi.mocked(forkSkillModule.forkSkill).mockResolvedValue('forked-skill-id');
 
       const { result } = renderHook(() => useSkillMutations());
@@ -421,17 +420,21 @@ describe('useSkillMutations', () => {
       expect(forkedSkillId).toBe('forked-skill-id');
       expect(result.current.error).toBeNull();
       expect(databaseServiceModule.databaseService.getDb).toHaveBeenCalled();
-      expect(forkSkillModule.forkSkill).toHaveBeenCalledWith('source-skill-1', mockDbService);
+      expect(forkSkillModule.forkSkill).toHaveBeenCalledWith(
+        'source-skill-1',
+        expect.objectContaining({
+          getSkillById: expect.any(Function),
+          updateSkill: expect.any(Function),
+          deleteSkill: expect.any(Function),
+          listSkills: expect.any(Function),
+        })
+      );
     });
 
     it('should handle fork skill errors', async () => {
       const mockDb = {};
-      const mockDbService = {};
 
       vi.mocked(databaseServiceModule.databaseService.getDb).mockResolvedValue(mockDb as any);
-      vi.mocked(skillDatabaseServiceModule.SkillDatabaseService).mockImplementation(
-        () => mockDbService as any
-      );
       vi.mocked(forkSkillModule.forkSkill).mockResolvedValue(null);
 
       const { result } = renderHook(() => useSkillMutations());

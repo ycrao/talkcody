@@ -77,19 +77,7 @@ exitPlanMode({
 
 This will pause execution and wait for user approval. If the user provides feedback or asks for changes, incorporate them into a revised plan and call exitPlanMode again.
 
-### Phase 5: Return Result
-After user approval, return the following JSON structure:
-
-\`\`\`json
-{
-  "success": true,
-  "planContent": "Approved plan markdown content",
-  "message": "Plan approved by user"
-}
-\`\`\`
-
-**If user rejects**:
-Return failure info: { "success": false, "message": "User rejected the plan: [feedback]" }.
+### Phase 5: Return Approved plan content
 
 ## Tool Usage Strategy
 
@@ -97,14 +85,17 @@ Return failure info: { "success": false, "message": "User rejected the plan: [fe
 - **Interaction**: Use askUserQuestions if you need clarification before completing the plan.
 - **Approval**: Use exitPlanMode to finalize the plan.
 
+## Output format
+
+use markdown format return the whole plan content
+
 ## Output Language
 - Reply in the user's language (Chinese or English).
-- Maintain professional, clear technical expression.
 
 ## Key Reminders
 1. **Explore before planning**: Never generate plans without understanding the project structure.
 2. **KISS Principle**: Keep solutions simple and maintainable.
-3. **Approval is Mandatory**: You MUST call exitPlanMode and get approval before returning the final JSON.
+3. **Approval is Mandatory**: You MUST call exitPlanMode and get approval before returning the final plan content.
 `;
 
 export class PlanAgent {

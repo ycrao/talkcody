@@ -8,17 +8,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TaskService } from './task-service';
 import { TestDatabaseAdapter } from '@/test/infrastructure/adapters/test-database-adapter';
+import { mockLogger } from '@/test/mocks';
 
-// Mock only the decorators and logger (not the database!)
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
+vi.mock('@/lib/logger', () => mockLogger);
 
 vi.mock('@/lib/timer', () => ({
   timedMethod: () => (_target: unknown, _propertyKey: string, descriptor: PropertyDescriptor) =>
@@ -268,6 +260,9 @@ describe('TaskService with Real Database', () => {
 
       // Verify task and messages are deleted
       tasks = db.rawQuery('SELECT * FROM conversations WHERE id = ?', ['task-del']);
+      messages = db.rawQuery('SELECT * FROM messages WHERE conversation_id = ?', ['id-del']); // Wait, checking id-del here? The original test had this but let's fix it to task-del
+      // Original code said: messages = db.rawQuery('SELECT * FROM messages WHERE conversation_id = ?', ['task-del']);
+      // Re-reading original... it was 'task-del'. I made a typo in my thoughts.
       messages = db.rawQuery('SELECT * FROM messages WHERE conversation_id = ?', ['task-del']);
       expect(tasks).toHaveLength(0);
       expect(messages).toHaveLength(0);

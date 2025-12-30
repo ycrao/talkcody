@@ -1,5 +1,11 @@
+import { logger } from '@/lib/logger';
+import { providerRegistry } from '@/providers';
+import { modelLoader } from '@/providers/models/model-loader';
+import type { ProviderConfig } from '@/types/api-keys';
+import type { ModelConfig as ModelConfigType } from '@/types/models';
+
+// Model constants - these should be defined before any imports that might use them
 export const GPT5_MINI = 'gpt-5-mini';
-export const GPT51_CODE_MAX = 'gpt-51-codex-max';
 export const MINIMAX_M21 = 'minimax-m21';
 export const GEMINI_25_FLASH_LITE = 'gemini-2.5-flash-lite';
 export const CODE_STARL = 'codestral';
@@ -7,12 +13,6 @@ export const CLAUDE_HAIKU = 'claude-haiku-4.5';
 export const GROK_CODE_FAST = 'grok-code-fast-1';
 export const NANO_BANANA_PRO = 'gemini-3-pro-image';
 export const SCRIBE_V2_REALTIME = 'scribe-v2-realtime';
-
-import { logger } from '@/lib/logger';
-import { providerRegistry } from '@/providers';
-import { modelLoader } from '@/providers/models/model-loader';
-import type { ProviderConfig } from '@/types/api-keys';
-import type { ModelConfig as ModelConfigType } from '@/types/models';
 
 // Dynamic model configs loaded from JSON
 let MODEL_CONFIGS: Record<string, ModelConfigType> = {};
@@ -43,8 +43,16 @@ export function ensureModelsInitialized(): Promise<void> {
   return initPromise;
 }
 
-// Initialize on module load
-initPromise = initializeModels();
+// Initialize on module load - but defer to avoid circular dependency issues
+if (typeof window !== 'undefined') {
+  // Browser environment - initialize after a tick to allow modules to load
+  setTimeout(() => {
+    initPromise = initializeModels();
+  }, 0);
+} else {
+  // Node/test environment - initialize synchronously
+  initPromise = initializeModels();
+}
 
 // Refresh model configs - used for hot-reload
 export async function refreshModelConfigs(): Promise<void> {

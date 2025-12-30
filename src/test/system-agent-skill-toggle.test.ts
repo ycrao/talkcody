@@ -16,6 +16,9 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Mock logger FIRST before any imports that may use it
+
 import { activeSkillsConfigService } from '@/services/active-skills-config-service';
 import { useSkillsStore } from '@/stores/skills-store';
 
@@ -28,14 +31,6 @@ vi.mock('@/services/active-skills-config-service', () => ({
 }));
 
 // Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
 
 describe('Bug Fix: Global Skill Toggle', () => {
   beforeEach(() => {

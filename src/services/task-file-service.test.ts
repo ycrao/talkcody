@@ -35,15 +35,6 @@ vi.mock('@/services/workspace-root-service', () => ({
   getEffectiveWorkspaceRoot: mockGetEffectiveWorkspaceRoot,
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    trace: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
 
 // Import after mocking
 import { TaskFileService, taskFileService } from './task-file-service';

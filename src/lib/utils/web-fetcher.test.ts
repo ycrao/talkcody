@@ -19,15 +19,6 @@ vi.mock('./readability-extractor', () => ({
 
 const mockReadabilityExtract = readabilityExtractorModule.readabilityExtractor.extract as Mock;
 
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
 // Set up environment variable for tests
 const originalEnv = import.meta.env;
 

@@ -31,7 +31,38 @@ interface FileChangesSummaryProps {
 
 export function FileChangesSummary({ taskId, onSendMessage }: FileChangesSummaryProps) {
   const changesByTask = useFileChangesStore((state) => state.changesByTask);
-  const changes = useMemo(() => changesByTask.get(taskId) || [], [changesByTask, taskId]);
+  const rawChanges = useMemo(() => changesByTask.get(taskId) || [], [changesByTask, taskId]);
+
+  // Merge multiple changes to the same file
+  const changes = useMemo(() => {
+    const fileMap = new Map<string, (typeof rawChanges)[0]>();
+
+    for (const change of rawChanges) {
+      const existing = fileMap.get(change.filePath);
+
+      if (!existing) {
+        fileMap.set(change.filePath, { ...change });
+      } else {
+        // If the file was initially 'write' in this task, it remains 'write' even if subsequently edited
+        const isInitialWrite = existing.operation === 'write';
+
+        // Keep the earliest original content
+        // If it was initially a write, originalContent remains undefined/null
+        // If it was initially an edit, originalContent remains the first version's original content
+        const originalContent = existing.originalContent;
+
+        fileMap.set(change.filePath, {
+          ...change,
+          operation: isInitialWrite ? 'write' : change.operation,
+          originalContent,
+          newContent: change.newContent,
+        });
+      }
+    }
+
+    return Array.from(fileMap.values());
+  }, [rawChanges]);
+
   const selectFile = useRepositoryStore((state) => state.selectFile);
   const rootPath = useRepositoryStore((state) => state.rootPath);
   const getLastUserMessage = useTaskStore((state) => state.getLastUserMessage);

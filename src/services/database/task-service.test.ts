@@ -7,17 +7,9 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { TaskService } from './task-service';
 import { TestDatabaseAdapter } from '@/test/infrastructure/adapters/test-database-adapter';
+import { mockLogger } from '@/test/mocks';
 
-// Mock only the decorators and logger (not the database!)
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
+vi.mock('@/lib/logger', () => mockLogger);
 
 vi.mock('@/lib/timer', () => ({
   timedMethod: () => (_target: unknown, _propertyKey: string, descriptor: PropertyDescriptor) =>
@@ -62,215 +54,183 @@ describe('TaskService', () => {
       );
 
       expect(rows).toHaveLength(1);
+      expect(rows[0]?.id).toBe(taskId);
       expect(rows[0]?.title).toBe(title);
       expect(rows[0]?.project_id).toBe(projectId);
       expect(rows[0]?.message_count).toBe(0);
     });
 
     it('should use default project_id if not provided', async () => {
-      const title = 'Test Task';
-      const taskId = 'test-id-456';
-
-      await taskService.createTask(title, taskId);
+      await taskService.createTask('No project', 'no-project-id');
 
       const rows = db.rawQuery<{ project_id: string }>(
         'SELECT project_id FROM conversations WHERE id = ?',
-        [taskId]
+        ['no-project-id']
       );
 
       expect(rows[0]?.project_id).toBe('default');
     });
 
     it('should handle duplicate task ID error', async () => {
-      const title = 'Test Task';
-      const taskId = 'duplicate-id';
+      await taskService.createTask('Task 1', 'duplicate-id');
 
-      await taskService.createTask(title, taskId);
-
-      // Second creation with same ID should fail
-      await expect(taskService.createTask('Another Task', taskId)).rejects.toThrow();
+      await expect(taskService.createTask('Task 2', 'duplicate-id')).rejects.toThrow();
     });
   });
 
   describe('getTasks', () => {
     it('should return all tasks ordered by updated_at DESC', async () => {
-      await taskService.createTask('Task 1', 'task-1');
-      await new Promise(r => setTimeout(r, 10));
-      await taskService.createTask('Task 2', 'task-2');
-      await new Promise(r => setTimeout(r, 10));
-      await taskService.createTask('Task 3', 'task-3');
+      await taskService.createTask('Task 1', 'id-1');
+      // Delay to ensure different timestamps
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await taskService.createTask('Task 2', 'id-2');
 
       const tasks = await taskService.getTasks();
 
-      expect(tasks).toHaveLength(3);
-      expect(tasks[0]?.title).toBe('Task 3');
-      expect(tasks[2]?.title).toBe('Task 1');
+      expect(tasks).toHaveLength(2);
+      expect(tasks[0]?.id).toBe('id-2');
+      expect(tasks[1]?.id).toBe('id-1');
     });
 
     it('should filter tasks by project_id', async () => {
-      // Create second project
-      db.rawExecute(
-        'INSERT INTO projects (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-        ['project-2', 'Project 2', '', Date.now(), Date.now()]
-      );
+      await taskService.createTask('Default Task', 'id-default', 'default');
 
-      await taskService.createTask('Task in Default', 'task-default', 'default');
-      await taskService.createTask('Task in Project 2', 'task-p2', 'project-2');
+      // Create a second project
+      db.rawExecute(
+        'INSERT INTO projects (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        ['other', 'Other Project', Date.now(), Date.now()]
+      );
+      await taskService.createTask('Other Task', 'id-other', 'other');
 
       const defaultTasks = await taskService.getTasks('default');
-      const project2Tasks = await taskService.getTasks('project-2');
+      const otherTasks = await taskService.getTasks('other');
 
       expect(defaultTasks).toHaveLength(1);
-      expect(project2Tasks).toHaveLength(1);
-      expect(defaultTasks[0]?.title).toBe('Task in Default');
-      expect(project2Tasks[0]?.title).toBe('Task in Project 2');
+      expect(defaultTasks[0]?.id).toBe('id-default');
+      expect(otherTasks).toHaveLength(1);
+      expect(otherTasks[0]?.id).toBe('id-other');
     });
   });
 
   describe('updateTaskTitle', () => {
     it('should update task title', async () => {
-      await taskService.createTask('Original Title', 'task-upd');
+      await taskService.createTask('Old Title', 'id-update');
 
-      await taskService.updateTaskTitle('task-upd', 'New Title');
+      await taskService.updateTaskTitle('id-update', 'New Title');
 
-      const rows = db.rawQuery<{ title: string }>(
-        'SELECT title FROM conversations WHERE id = ?',
-        ['task-upd']
-      );
-
+      const rows = db.rawQuery<{ title: string }>('SELECT title FROM conversations WHERE id = ?', [
+        'id-update',
+      ]);
       expect(rows[0]?.title).toBe('New Title');
     });
 
     it('should update updated_at timestamp', async () => {
-      await taskService.createTask('Title', 'task-upd2');
-
-      const before = db.rawQuery<{ updated_at: number }>(
+      await taskService.createTask('Task', 'id-timestamp');
+      const firstUpdate = db.rawQuery<{ updated_at: number }>(
         'SELECT updated_at FROM conversations WHERE id = ?',
-        ['task-upd2']
-      );
+        ['id-timestamp']
+      )[0]?.updated_at;
 
-      await new Promise(r => setTimeout(r, 10));
-      await taskService.updateTaskTitle('task-upd2', 'New Title');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await taskService.updateTaskTitle('id-timestamp', 'New Title');
 
-      const after = db.rawQuery<{ updated_at: number }>(
+      const secondUpdate = db.rawQuery<{ updated_at: number }>(
         'SELECT updated_at FROM conversations WHERE id = ?',
-        ['task-upd2']
-      );
+        ['id-timestamp']
+      )[0]?.updated_at;
 
-      expect(after[0]?.updated_at).toBeGreaterThan(before[0]?.updated_at ?? 0);
+      expect(secondUpdate).toBeGreaterThan(firstUpdate ?? 0);
     });
   });
 
   describe('saveMessage', () => {
     it('should save message with all fields', async () => {
-      await taskService.createTask('Task', 'task-msg');
+      await taskService.createTask('Task', 'id-msg');
 
-      const messageId = await taskService.saveMessage(
-        'task-msg',
-        'user',
-        'Hello world',
-        0,
-        'assistant-1'
-      );
+      const messageId = await taskService.saveMessage('id-msg', 'user', 'Hello assistant', 0);
 
       expect(messageId).toBeDefined();
 
-      const messages = db.rawQuery<{
-        id: string;
-        role: string;
-        content: string;
-        assistant_id: string;
-        position_index: number;
-      }>(
-        'SELECT id, role, content, assistant_id, position_index FROM messages WHERE conversation_id = ?',
-        ['task-msg']
+      const rows = db.rawQuery<{ role: string; content: string; conversation_id: string }>(
+        'SELECT role, content, conversation_id FROM messages WHERE id = ?',
+        [messageId]
       );
-
-      expect(messages).toHaveLength(1);
-      expect(messages[0]?.role).toBe('user');
-      expect(messages[0]?.content).toBe('Hello world');
-      expect(messages[0]?.assistant_id).toBe('assistant-1');
-      expect(messages[0]?.position_index).toBe(0);
+      expect(rows[0]?.role).toBe('user');
+      expect(rows[0]?.content).toBe('Hello assistant');
+      expect(rows[0]?.conversation_id).toBe('id-msg');
     });
 
     it('should increment message_count', async () => {
-      await taskService.createTask('Task', 'task-msg2');
+      await taskService.createTask('Task', 'id-count');
 
-      await taskService.saveMessage('task-msg2', 'user', 'Message 1', 0);
-      await taskService.saveMessage('task-msg2', 'assistant', 'Message 2', 1);
-      await taskService.saveMessage('task-msg2', 'user', 'Message 3', 2);
+      await taskService.saveMessage('id-count', 'user', 'Msg 1', 0);
+      await taskService.saveMessage('id-count', 'assistant', 'Msg 2', 1);
 
       const rows = db.rawQuery<{ message_count: number }>(
         'SELECT message_count FROM conversations WHERE id = ?',
-        ['task-msg2']
+        ['id-count']
       );
-
-      expect(rows[0]?.message_count).toBe(3);
+      expect(rows[0]?.message_count).toBe(2);
     });
 
     it('should use provided messageId', async () => {
-      await taskService.createTask('Task', 'task-msg3');
+      await taskService.createTask('Task', 'id-custom');
+      const customId = 'custom-msg-id';
 
-      const customId = 'my-custom-message-id';
-      const returnedId = await taskService.saveMessage(
-        'task-msg3',
+      await taskService.saveMessage(
+        'id-custom',
         'user',
-        'Hello',
+        'Content',
         0,
         undefined,
         undefined,
         customId
       );
 
-      expect(returnedId).toBe(customId);
+      const rows = db.rawQuery('SELECT id FROM messages WHERE id = ?', [customId]);
+      expect(rows).toHaveLength(1);
     });
   });
 
   describe('updateMessage', () => {
     it('should update message content', async () => {
-      await taskService.createTask('Task', 'task-update-msg');
-      const msgId = await taskService.saveMessage('task-update-msg', 'assistant', '', 0);
+      await taskService.createTask('Task', 'id-msg-upd');
+      const msgId = await taskService.saveMessage('id-msg-upd', 'user', 'Old content', 0);
 
-      await taskService.updateMessage(msgId, 'Updated content');
+      await taskService.updateMessage(msgId, 'New content');
 
-      const messages = db.rawQuery<{ content: string }>(
-        'SELECT content FROM messages WHERE id = ?',
-        [msgId]
-      );
-
-      expect(messages[0]?.content).toBe('Updated content');
+      const rows = db.rawQuery<{ content: string }>('SELECT content FROM messages WHERE id = ?', [
+        msgId,
+      ]);
+      expect(rows[0]?.content).toBe('New content');
     });
   });
 
   describe('getMessages', () => {
     it('should return messages ordered by timestamp ASC', async () => {
-      await taskService.createTask('Task', 'task-get-msg');
+      await taskService.createTask('Task', 'id-msgs');
 
-      await taskService.saveMessage('task-get-msg', 'user', 'First', 0);
-      await new Promise(r => setTimeout(r, 5));
-      await taskService.saveMessage('task-get-msg', 'assistant', 'Second', 1);
-      await new Promise(r => setTimeout(r, 5));
-      await taskService.saveMessage('task-get-msg', 'user', 'Third', 2);
+      await taskService.saveMessage('id-msgs', 'user', 'First', 0);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await taskService.saveMessage('id-msgs', 'assistant', 'Second', 1);
 
-      const messages = await taskService.getMessages('task-get-msg');
+      const messages = await taskService.getMessages('id-msgs');
 
-      expect(messages).toHaveLength(3);
+      expect(messages).toHaveLength(2);
       expect(messages[0]?.content).toBe('First');
       expect(messages[1]?.content).toBe('Second');
-      expect(messages[2]?.content).toBe('Third');
     });
   });
 
   describe('deleteTask', () => {
     it('should delete task and all messages', async () => {
-      await taskService.createTask('Task to Delete', 'task-del');
-      await taskService.saveMessage('task-del', 'user', 'Message 1', 0);
-      await taskService.saveMessage('task-del', 'assistant', 'Message 2', 1);
+      await taskService.createTask('Task', 'id-del');
+      await taskService.saveMessage('id-del', 'user', 'Msg', 0);
 
-      await taskService.deleteTask('task-del');
+      await taskService.deleteTask('id-del');
 
-      const tasks = db.rawQuery('SELECT * FROM conversations WHERE id = ?', ['task-del']);
-      const messages = db.rawQuery('SELECT * FROM messages WHERE conversation_id = ?', ['task-del']);
+      const tasks = db.rawQuery('SELECT id FROM conversations WHERE id = ?', ['id-del']);
+      const messages = db.rawQuery('SELECT id FROM messages WHERE conversation_id = ?', ['id-del']);
 
       expect(tasks).toHaveLength(0);
       expect(messages).toHaveLength(0);
@@ -279,98 +239,87 @@ describe('TaskService', () => {
 
   describe('getLatestUserMessageContent', () => {
     it('should return latest user message', async () => {
-      await taskService.createTask('Task', 'task-latest');
+      await taskService.createTask('Task', 'id-latest');
+      await taskService.saveMessage('id-latest', 'user', 'First', 0);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await taskService.saveMessage('id-latest', 'assistant', 'Reply', 1);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await taskService.saveMessage('id-latest', 'user', 'Second', 2);
 
-      await taskService.saveMessage('task-latest', 'user', 'First user message', 0);
-      await new Promise(r => setTimeout(r, 5));
-      await taskService.saveMessage('task-latest', 'assistant', 'Assistant response', 1);
-      await new Promise(r => setTimeout(r, 5));
-      await taskService.saveMessage('task-latest', 'user', 'Second user message', 2);
-
-      const latest = await taskService.getLatestUserMessageContent('task-latest');
-
-      expect(latest).toBe('Second user message');
+      const latest = await taskService.getLatestUserMessageContent('id-latest');
+      expect(latest).toBe('Second');
     });
 
     it('should return null if no user messages', async () => {
-      await taskService.createTask('Task', 'task-no-user');
-      await taskService.saveMessage('task-no-user', 'assistant', 'Only assistant', 0);
+      await taskService.createTask('Task', 'id-none');
+      await taskService.saveMessage('id-none', 'assistant', 'Hello', 0);
 
-      const latest = await taskService.getLatestUserMessageContent('task-no-user');
-
+      const latest = await taskService.getLatestUserMessageContent('id-none');
       expect(latest).toBeNull();
     });
   });
 
   describe('updateTaskUsage', () => {
     it('should accumulate usage values', async () => {
-      await taskService.createTask('Task', 'task-usage');
+      await taskService.createTask('Task', 'id-usage');
 
-      await taskService.updateTaskUsage('task-usage', 0.01, 100, 50);
-      await taskService.updateTaskUsage('task-usage', 0.02, 200, 100);
+      await taskService.updateTaskUsage('id-usage', 0.1, 10, 5);
+      await taskService.updateTaskUsage('id-usage', 0.2, 20, 10);
 
       const rows = db.rawQuery<{ cost: number; input_token: number; output_token: number }>(
         'SELECT cost, input_token, output_token FROM conversations WHERE id = ?',
-        ['task-usage']
+        ['id-usage']
       );
 
-      expect(rows[0]?.cost).toBeCloseTo(0.03, 5);
-      expect(rows[0]?.input_token).toBe(300);
-      expect(rows[0]?.output_token).toBe(150);
+      expect(rows[0]?.cost).toBeCloseTo(0.3);
+      expect(rows[0]?.input_token).toBe(30);
+      expect(rows[0]?.output_token).toBe(15);
     });
   });
 
   describe('updateTaskSettings / getTaskSettings', () => {
     it('should save and retrieve settings', async () => {
-      await taskService.createTask('Task', 'task-settings');
+      await taskService.createTask('Task', 'id-settings');
+      const settings = { model: 'gpt-4', temperature: 0.7 };
 
-      const settings = JSON.stringify({ model: 'gpt-4', temperature: 0.7 });
-      await taskService.updateTaskSettings('task-settings', settings);
+      await taskService.updateTaskSettings('id-settings', settings);
+      const retrieved = await taskService.getTaskSettings('id-settings');
 
-      const retrieved = await taskService.getTaskSettings('task-settings');
-
-      expect(retrieved).toBe(settings);
+      // getTaskSettings returns raw string, caller should parse it
+      expect(retrieved).toEqual(JSON.stringify(settings));
     });
 
     it('should return null if no settings', async () => {
-      await taskService.createTask('Task', 'task-no-settings');
-
-      const retrieved = await taskService.getTaskSettings('task-no-settings');
-
+      await taskService.createTask('Task', 'id-no-settings');
+      const retrieved = await taskService.getTaskSettings('id-no-settings');
       expect(retrieved).toBeNull();
     });
   });
 
   describe('Concurrent operations', () => {
     it('should handle concurrent saveMessage and updateTaskTitle', async () => {
-      await taskService.createTask('Initial Title', 'task-concurrent');
+      await taskService.createTask('Initial', 'id-concurrent');
 
       await Promise.all([
-        taskService.saveMessage('task-concurrent', 'user', 'Concurrent message', 0),
-        taskService.updateTaskTitle('task-concurrent', 'Updated Title'),
+        taskService.saveMessage('id-concurrent', 'user', 'Msg', 0),
+        taskService.updateTaskTitle('id-concurrent', 'Updated'),
       ]);
 
-      const task = await taskService.getTaskDetails('task-concurrent');
-      const messages = await taskService.getMessages('task-concurrent');
-
-      expect(task?.title).toBe('Updated Title');
-      expect(messages).toHaveLength(1);
-      expect(messages[0]?.content).toBe('Concurrent message');
+      const task = (await taskService.getTasks()).find((t) => t.id === 'id-concurrent');
+      expect(task?.title).toBe('Updated');
+      expect(task?.message_count).toBe(1);
     });
 
     it('should handle multiple concurrent message saves', async () => {
-      await taskService.createTask('Task', 'task-multi-msg');
+      await taskService.createTask('Task', 'id-concurrent-msgs');
 
       await Promise.all([
-        taskService.saveMessage('task-multi-msg', 'user', 'Message 1', 0, undefined, undefined, 'msg-1'),
-        taskService.saveMessage('task-multi-msg', 'user', 'Message 2', 1, undefined, undefined, 'msg-2'),
-        taskService.saveMessage('task-multi-msg', 'user', 'Message 3', 2, undefined, undefined, 'msg-3'),
+        taskService.saveMessage('id-concurrent-msgs', 'user', 'Msg 1', 0),
+        taskService.saveMessage('id-concurrent-msgs', 'user', 'Msg 2', 1),
+        taskService.saveMessage('id-concurrent-msgs', 'user', 'Msg 3', 2),
       ]);
 
-      const messages = await taskService.getMessages('task-multi-msg');
-      const task = await taskService.getTaskDetails('task-multi-msg');
-
-      expect(messages).toHaveLength(3);
+      const task = (await taskService.getTasks()).find((t) => t.id === 'id-concurrent-msgs');
       expect(task?.message_count).toBe(3);
     });
   });

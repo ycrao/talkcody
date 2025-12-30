@@ -7,20 +7,7 @@ import {
   restoreToolsFromConfig,
 } from './tool-registry';
 
-// Mock logger - needs to be inside vi.mock factory because vi.mock is hoisted
-vi.mock('@/lib/logger', () => {
-  const logger = {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  };
-  return {
-    logger,
-    default: logger,
-  };
-});
+import { logger } from '@/lib/logger';
 
 vi.mock('@/lib/tool-adapter', () => ({
   convertToolsForAI: vi.fn((tools) => tools),
@@ -70,19 +57,11 @@ vi.mock('@/lib/mcp/multi-mcp-adapter', () => ({
   isMCPTool: vi.fn((toolName: string) => toolName.startsWith('mcp__')),
 }));
 
-import { logger } from '@/lib/logger';
 import { multiMCPAdapter } from '@/lib/mcp/multi-mcp-adapter';
 import { convertToolsForAI } from '@/lib/tool-adapter';
 
 const mockConvertToolsForAI = convertToolsForAI as any;
 const mockMultiMCPAdapter = multiMCPAdapter as any;
-const mockLogger = logger as unknown as {
-  error: ReturnType<typeof vi.fn>;
-  info: ReturnType<typeof vi.fn>;
-  warn: ReturnType<typeof vi.fn>;
-  debug: ReturnType<typeof vi.fn>;
-  trace: ReturnType<typeof vi.fn>;
-};
 
 describe('tool-registry', () => {
   beforeEach(() => {
@@ -135,7 +114,7 @@ describe('tool-registry', () => {
 
       await restoreToolsFromConfig(config);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Unknown tool in array: unknownTool')
       );
     });
@@ -178,7 +157,7 @@ describe('tool-registry', () => {
 
       const result = await restoreToolsFromConfig(config);
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Failed to parse tools config JSON'),
         expect.any(Error)
       );
@@ -278,7 +257,7 @@ describe('tool-registry', () => {
       await restoreToolsFromConfig(oldConfig);
 
       // Should warn about unknown tool for old key name
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Unknown tool in config: todoWriteTool')
       );
     });

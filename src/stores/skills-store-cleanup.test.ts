@@ -9,6 +9,8 @@ import { useSkillsStore } from './skills-store';
 import type { Skill } from '@/services/skills';
 
 // Mock dependencies
+
+// Mock dependencies
 vi.mock('@/services/database-service', () => ({
 	databaseService: {
 		getActiveSkills: vi.fn().mockResolvedValue([]),
@@ -36,13 +38,7 @@ vi.mock('@/services/active-skills-config-service', () => ({
 	},
 }));
 
-vi.mock('@/lib/logger', () => ({
-	logger: {
-		info: vi.fn(),
-		error: vi.fn(),
-		warn: vi.fn(),
-	},
-}));
+// Mock logger
 
 describe('Skills Store - Cleanup Logic', () => {
 	beforeEach(() => {

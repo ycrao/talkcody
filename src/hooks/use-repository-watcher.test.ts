@@ -35,15 +35,6 @@ vi.mock('@tauri-apps/api/event', () => ({
   }),
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 vi.mock('@/services/fast-directory-tree-service', () => ({
   fastDirectoryTreeService: {
     invalidatePath: vi.fn(),
@@ -232,6 +223,80 @@ describe('useRepositoryWatcher', () => {
   });
 
   describe('file-system-changed handling', () => {
+    it('should trigger external file refresh for open files in multi-path payload', async () => {
+      const useRepositoryWatcher = await getHook();
+
+      mockRepositoryState.openFiles = [
+        { path: '/test/repo/file1.ts', content: 'a', isLoading: false, error: null },
+        { path: '/test/repo/file2.ts', content: 'b', isLoading: false, error: null },
+      ];
+
+      renderHook(() => useRepositoryWatcher());
+
+      await vi.waitFor(() => {
+        expect(eventListeners.has('file-system-changed')).toBe(true);
+      });
+
+      act(() => {
+        emitEvent('file-system-changed', [
+          '/test/repo/file1.ts',
+          '/test/repo/file1.ts',
+          '/test/repo/file3.ts',
+        ]);
+      });
+
+      vi.advanceTimersByTime(150);
+
+      expect(mockHandleExternalFileChange).toHaveBeenCalledTimes(1);
+      expect(mockHandleExternalFileChange).toHaveBeenCalledWith('/test/repo/file1.ts');
+    });
+
+    it('should handle single object payload with path', async () => {
+      const useRepositoryWatcher = await getHook();
+
+      mockRepositoryState.openFiles = [
+        { path: '/test/repo/file1.ts', content: 'a', isLoading: false, error: null },
+      ];
+
+      renderHook(() => useRepositoryWatcher());
+
+      await vi.waitFor(() => {
+        expect(eventListeners.has('file-system-changed')).toBe(true);
+      });
+
+      act(() => {
+        emitEvent('file-system-changed', { path: '/test/repo/file1.ts' });
+      });
+
+      vi.advanceTimersByTime(150);
+
+      expect(mockHandleExternalFileChange).toHaveBeenCalledTimes(1);
+      expect(mockHandleExternalFileChange).toHaveBeenCalledWith('/test/repo/file1.ts');
+    });
+
+    it('should handle payload with paths array', async () => {
+      const useRepositoryWatcher = await getHook();
+
+      mockRepositoryState.openFiles = [
+        { path: '/test/repo/file2.ts', content: 'b', isLoading: false, error: null },
+      ];
+
+      renderHook(() => useRepositoryWatcher());
+
+      await vi.waitFor(() => {
+        expect(eventListeners.has('file-system-changed')).toBe(true);
+      });
+
+      act(() => {
+        emitEvent('file-system-changed', { paths: ['/test/repo/file2.ts', '/test/repo/file3.ts'] });
+      });
+
+      vi.advanceTimersByTime(150);
+
+      expect(mockHandleExternalFileChange).toHaveBeenCalledTimes(1);
+      expect(mockHandleExternalFileChange).toHaveBeenCalledWith('/test/repo/file2.ts');
+    });
+
     it('should debounce file tree refresh', async () => {
       const useRepositoryWatcher = await getHook();
 
@@ -243,13 +308,13 @@ describe('useRepositoryWatcher', () => {
 
       // Multiple file changes
       act(() => {
-        emitEvent('file-system-changed', { path: '/test/repo/file1.ts' });
+        emitEvent('file-system-changed', ['/test/repo/file1.ts']);
       });
       act(() => {
-        emitEvent('file-system-changed', { path: '/test/repo/file2.ts' });
+        emitEvent('file-system-changed', ['/test/repo/file2.ts']);
       });
       act(() => {
-        emitEvent('file-system-changed', { path: '/test/repo/file3.ts' });
+        emitEvent('file-system-changed', ['/test/repo/file3.ts']);
       });
 
       // Before debounce completes
@@ -271,7 +336,7 @@ describe('useRepositoryWatcher', () => {
       });
 
       act(() => {
-        emitEvent('file-system-changed', { path: '/test/repo/file.ts' });
+        emitEvent('file-system-changed', ['/test/repo/file.ts']);
       });
 
       vi.advanceTimersByTime(300);

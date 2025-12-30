@@ -55,6 +55,9 @@ interface SettingsState {
   // What's New
   last_seen_version: string;
 
+  // UI State
+  sidebar_view: string; // 'files' | 'tasks' - current sidebar view
+
   // Terminal Settings
   terminal_shell: string; // 'auto' | 'pwsh' | 'powershell' | 'cmd' | custom path
   terminal_font: string; // Terminal font family
@@ -141,6 +144,10 @@ interface SettingsActions {
   setLastSeenVersion: (version: string) => Promise<void>;
   getLastSeenVersion: () => string;
 
+  // Sidebar View
+  setSidebarView: (view: string) => Promise<void>;
+  getSidebarView: () => string;
+
   // Terminal Settings
   setTerminalShell: (shell: string) => Promise<void>;
   getTerminalShell: () => string;
@@ -202,6 +209,7 @@ const DEFAULT_SETTINGS: Omit<SettingsState, 'loading' | 'error' | 'isInitialized
   apiKeys: {} as ApiKeySettings,
   shortcuts: DEFAULT_SHORTCUTS,
   last_seen_version: '',
+  sidebar_view: 'files',
   terminal_shell: 'auto',
   terminal_font:
     'Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", "Droid Sans Mono", "Courier New", monospace',
@@ -270,6 +278,7 @@ class SettingsDatabase {
       shortcut_saveFile: JSON.stringify(DEFAULT_SHORTCUTS.saveFile),
       shortcut_openModelSettings: JSON.stringify(DEFAULT_SHORTCUTS.openModelSettings),
       last_seen_version: '',
+      sidebar_view: 'files',
       terminal_shell: 'auto',
       terminal_font:
         'Menlo, Monaco, "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", "Droid Sans Mono", "Courier New", monospace',
@@ -392,6 +401,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         'model_type_transcription',
         'onboarding_completed',
         'last_seen_version',
+        'sidebar_view',
         'terminal_shell',
         'terminal_font',
         'terminal_font_size',
@@ -465,6 +475,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         apiKeys: apiKeys as ApiKeySettings,
         shortcuts: shortcuts as ShortcutSettings,
         last_seen_version: rawSettings.last_seen_version || '',
+        sidebar_view: rawSettings.sidebar_view || 'files',
         terminal_shell: rawSettings.terminal_shell || 'auto',
         terminal_font:
           rawSettings.terminal_font ||
@@ -797,6 +808,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     return get().last_seen_version;
   },
 
+  // Sidebar View
+  setSidebarView: async (view: string) => {
+    await settingsDb.set('sidebar_view', view);
+    set({ sidebar_view: view });
+  },
+
+  getSidebarView: () => {
+    return get().sidebar_view || 'files';
+  },
+
   // Terminal Settings
   setTerminalShell: async (shell: string) => {
     await settingsDb.set('terminal_shell', shell);
@@ -1027,6 +1048,11 @@ export const settingsManager = {
   // What's New
   setLastSeenVersion: (version: string) => useSettingsStore.getState().setLastSeenVersion(version),
   getLastSeenVersion: () => useSettingsStore.getState().getLastSeenVersion(),
+
+  // Sidebar View
+  setSidebarView: (view: string) => useSettingsStore.getState().setSidebarView(view),
+  getSidebarView: () => useSettingsStore.getState().getSidebarView(),
+
   setTerminalShell: (shell: string) => useSettingsStore.getState().setTerminalShell(shell),
   getTerminalShell: () => useSettingsStore.getState().getTerminalShell(),
   setTerminalFont: (font: string) => useSettingsStore.getState().setTerminalFont(font),

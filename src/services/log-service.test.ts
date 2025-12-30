@@ -18,12 +18,6 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   readTextFile: vi.fn(() => Promise.resolve('')),
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
 
 describe('LogService', () => {
   let logService: LogService;

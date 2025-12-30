@@ -3,13 +3,8 @@ import { useUserQuestionStore } from './user-question-store';
 import type { AskUserQuestionsOutput, Question } from '@/types/user-question';
 
 // Mock logger to avoid console noise
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
+
+// Mock logger to avoid console noise
 
 // Helper to create mock questions
 function createMockQuestions(count = 1): Question[] {

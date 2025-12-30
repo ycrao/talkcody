@@ -4,22 +4,8 @@ import { z } from 'zod';
 import type { ToolInput, ToolOutput, ToolWithUI } from '@/types/tool';
 
 // Mock logger before importing
-vi.mock('./logger', () => ({
-  default: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
+import { mockLogger } from '@/test/mocks';
+vi.mock('./logger', () => mockLogger);
 
 import { convertToolForAI, convertToolsForAI, getToolUIRenderers } from './tool-adapter';
 

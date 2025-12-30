@@ -640,7 +640,7 @@ export class BashExecutor {
       }
 
       // Execute command
-      const result = await this.executeCommand(command, rootPath || null);
+      const result = await this.executeCommand(command, rootPath || null, 300000, 60000);
       this.logger.info('Command result:', result);
 
       return this.formatResult(result, command);

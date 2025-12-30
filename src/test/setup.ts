@@ -1,9 +1,23 @@
-// src/test/setup.ts
 import { vi } from 'vitest';
 import '@testing-library/jest-dom';
 
+// Import centralized mocks
+import {
+  mockDatabaseService,
+  mockLogger,
+  mockRepositoryService,
+  mockSettingsStore,
+  mockTaskManager,
+  mockTauriPath,
+  mockWorkspaceRootService,
+} from './mocks';
+
 // Note: monaco-editor is mocked via alias in vitest.config.ts
 // See src/test/mocks/monaco-editor.ts
+
+// ============================================
+// Tauri API Mocks
+// ============================================
 
 // Mock window object for Tauri APIs (only in browser environment)
 // NOTE: configurable and writable must be true to allow @tauri-apps/api/mocks to override
@@ -17,12 +31,10 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Mock Tauri APIs
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-// Mock @libsql/client for Turso database
 vi.mock('@libsql/client', () => {
   const mockClient = {
     execute: vi.fn().mockResolvedValue({ rows: [], rowsAffected: 0 }),
@@ -53,98 +65,25 @@ vi.mock('@tauri-apps/plugin-log', () => ({
   trace: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/api/path', () => ({
-  normalize: vi.fn().mockImplementation(async (path: string) => path),
-  appDataDir: vi.fn().mockResolvedValue('/test/app-data'),
-  join: vi.fn().mockImplementation(async (...paths: string[]) => {
-    // Filter out "." and empty strings, then join
-    const filtered = paths.filter((p) => p && p !== '.');
-    return filtered.join('/');
-  }),
-  dirname: vi.fn().mockImplementation(async (path: string) => {
-    const parts = path.split('/');
-    parts.pop();
-    return parts.join('/') || '/';
-  }),
-  isAbsolute: vi.fn().mockImplementation(async (path: string) => path.startsWith('/')),
+// Apply centralized mocks globally to setup.ts
+vi.mock('@tauri-apps/api/path', () => mockTauriPath);
+vi.mock('@/lib/logger', () => ({
+  logger: mockLogger.logger,
+  default: mockLogger.default,
 }));
-
-// Mock logger
-vi.mock('../lib/logger', () => {
-  const mockLogger = {
-    trace: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  };
-  return {
-    logger: mockLogger,
-    default: mockLogger,
-  };
-});
-
-// Mock repository service
-vi.mock('../services/repository-service', () => ({
-  repositoryService: {
-    readFileWithCache: vi.fn().mockResolvedValue(''),
-    writeFile: vi.fn().mockResolvedValue(undefined),
-    clearCache: vi.fn(),
-  },
-}));
+vi.mock('@/stores/settings-store', () => mockSettingsStore);
+vi.mock('@/services/workspace-root-service', () => mockWorkspaceRootService);
+vi.mock('@/services/database-service', () => ({ databaseService: mockDatabaseService }));
+vi.mock('@/services/task-manager', () => ({ TaskManager: mockTaskManager }));
+vi.mock('@/services/repository-service', () => ({ repositoryService: mockRepositoryService }));
 
 // Mock repository utils
-vi.mock('../services/repository-utils', () => ({
+vi.mock('@/services/repository-utils', () => ({
   normalizeFilePath: vi.fn().mockImplementation(async (root, path) => {
-    // If path is already absolute (starts with /), return it as-is
-    if (path.startsWith('/')) {
-      return path;
-    }
-    // Otherwise, join with root
+    if (path.startsWith('/')) return path;
     return `${root}/${path}`;
   }),
 }));
-
-// Mock settings store
-vi.mock('../stores/settings-store', () => ({
-  settingsManager: {
-    getCurrentRootPath: vi.fn().mockReturnValue('/test/root'),
-    getCurrentTaskId: vi.fn().mockReturnValue('conv-123'),
-    getProject: vi.fn().mockResolvedValue(null),
-    getSync: vi.fn().mockReturnValue(undefined),
-    getBatchSync: vi.fn().mockReturnValue({}),
-    db: {
-      select: vi.fn().mockResolvedValue([]),
-      execute: vi.fn().mockResolvedValue({ rowsAffected: 0 }),
-    },
-  },
-  SettingsManager: vi.fn().mockImplementation(() => ({
-    getCurrentRootPath: vi.fn().mockReturnValue('/test/root'),
-    getCurrentTaskId: vi.fn().mockReturnValue('conv-123'),
-    getProject: vi.fn().mockResolvedValue(null),
-  })),
-  useSettingsStore: {
-    getState: vi.fn(() => ({
-      language: 'en',
-    })),
-    subscribe: vi.fn(),
-    setState: vi.fn(),
-  },
-}));
-
-vi.mock('@/services/workspace-root-service', () => ({
-  getValidatedWorkspaceRoot: vi.fn().mockResolvedValue('/test/root'),
-  getEffectiveWorkspaceRoot: vi.fn().mockResolvedValue('/test/root'),
-}));
-
-// Mock ResizeObserver
-(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = vi
-  .fn()
-  .mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  }));
 
 // Mock models config JSON import
 vi.mock('@talkcody/shared/data/models-config.json', () => ({
@@ -154,8 +93,8 @@ vi.mock('@talkcody/shared/data/models-config.json', () => ({
   },
 }));
 
-// Mock model loader to avoid JSON import issues in tests
-vi.mock('../lib/model-loader', () => ({
+// Mock model loader
+vi.mock('@/lib/model-loader', () => ({
   modelLoader: {
     getModels: vi.fn().mockResolvedValue([]),
     loadModels: vi.fn().mockResolvedValue([]),
@@ -163,27 +102,8 @@ vi.mock('../lib/model-loader', () => ({
   },
 }));
 
-// Mock task manager
-vi.mock('../services/task-manager', () => ({
-  TaskManager: {
-    getTaskSettings: vi.fn().mockResolvedValue(null),
-    updateTaskSettings: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
-// Mock database service
-vi.mock('../services/database-service', () => ({
-  databaseService: {
-    initialize: vi.fn().mockResolvedValue(undefined),
-    db: {
-      select: vi.fn().mockResolvedValue([]),
-      execute: vi.fn().mockResolvedValue({ rowsAffected: 0 }),
-    },
-  },
-}));
-
 // Mock models module
-vi.mock('../lib/models', () => ({
+vi.mock('@/lib/models', () => ({
   initializeModels: vi.fn().mockResolvedValue(undefined),
   getModelByProviderAndId: vi.fn().mockReturnValue(null),
   getProviderConfig: vi.fn().mockReturnValue(null),
@@ -191,14 +111,6 @@ vi.mock('../lib/models', () => ({
   CLAUDE_HAIKU: 'claude-haiku-4.5',
   GPT5: 'gpt-5',
   GPT5_MINI: 'gpt-5-mini',
-  GPT51_CODE_MAX: 'gpt-51-codex-max',
-  MINIMAX_M21: 'minimax-m21',
-  CODE_STARL: 'codestral',
-  GROK_CODE_FAST: 'grok-code-fast-1',
-  GLM_46: 'glm-4.6',
-  NANO_BANANA_PRO: 'gemini-3-pro-image',
-  SCRIBE_V2_REALTIME: 'scribe-v2-realtime',
-  GPT5_NANO: 'gpt-5-nano',
   MODEL_CONFIGS: {},
   refreshModelConfigs: vi.fn().mockResolvedValue(undefined),
   supportsImageOutput: vi.fn().mockReturnValue(false),
@@ -208,7 +120,7 @@ vi.mock('../lib/models', () => ({
 }));
 
 // Mock todo store
-vi.mock('../stores/todo-store', () => ({
+vi.mock('@/stores/todo-store', () => ({
   useTodoStore: {
     getState: vi.fn(() => ({
       todos: [],
@@ -216,6 +128,19 @@ vi.mock('../stores/todo-store', () => ({
     })),
   },
 }));
+
+// ============================================
+// Polyfills
+// ============================================
+
+// Mock ResizeObserver
+(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = vi
+  .fn()
+  .mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  }));
 
 // jsdom may not provide a clear() implementation; ensure a working localStorage polyfill exists.
 if (!globalThis.localStorage || typeof globalThis.localStorage.clear !== 'function') {
@@ -227,7 +152,7 @@ if (!globalThis.localStorage || typeof globalThis.localStorage.clear !== 'functi
     clear: () => {
       store.clear();
     },
-    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    getItem: (key: string) => (store.has(key) ? (store.get(key) ?? null) : null),
     key: (index: number) => Array.from(store.keys())[index] ?? null,
     removeItem: (key: string) => {
       store.delete(key);

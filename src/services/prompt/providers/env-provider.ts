@@ -99,7 +99,7 @@ export const EnvProvider: PromptContextProvider = {
 
       case 'plan_mode': {
         const isPlanModeEnabled = usePlanModeStore.getState().isPlanModeEnabled;
-        result = isPlanModeEnabled ? 'enabled' : 'disabled';
+        result = isPlanModeEnabled ? 'TRUE' : 'FALSE';
         break;
       }
     }

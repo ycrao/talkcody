@@ -2,18 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useNestedToolsStore } from '@/stores/nested-tools-store';
 import type { UIMessage } from '@/types/agent';
 
-// Mock logger before importing
-vi.mock('../logger', () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  },
-}));
-
-import { logger } from '../logger';
+import { logger } from '@/lib/logger';
 
 describe('callAgent tool error logging', () => {
   let originalAddMessage: any;

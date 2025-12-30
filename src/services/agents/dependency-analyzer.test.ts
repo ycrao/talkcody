@@ -1,19 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/logger', () => {
-  const logger = {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    trace: vi.fn(),
-  };
-  return {
-    logger,
-    default: logger,
-  };
-});
-
 vi.mock('@/services/agents/agent-registry', () => ({
   agentRegistry: {
     getWithResolvedTools: vi.fn(async (agentId: string) => {

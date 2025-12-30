@@ -1,17 +1,9 @@
 import type { ModelMessage, ToolCallPart, ToolResultPart } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ContextRewriter } from './context-rewriter';
 
 // Use vi.hoisted to create mock functions that can be referenced in vi.mock
 const mockSummarizeCodeContent = vi.hoisted(() => vi.fn());
-
-// Mock logger
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
 
 // Mock code-navigation-service
 vi.mock('@/services/code-navigation-service', () => ({
@@ -42,8 +34,6 @@ vi.mock('@/services/code-navigation-service', () => ({
     }
   },
 }));
-
-import { MessageRewriter } from './message-rewriter';
 
 // Helper to generate content with a specific number of lines
 function generateContent(lineCount: number): string {
@@ -106,11 +96,11 @@ function createWriteFileCall(
 }
 
 describe('MessageRewriter', () => {
-  let messageRewriter: MessageRewriter;
+  let messageRewriter: ContextRewriter;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    messageRewriter = new MessageRewriter();
+    messageRewriter = new ContextRewriter();
   });
 
   describe('rewriteMessages', () => {

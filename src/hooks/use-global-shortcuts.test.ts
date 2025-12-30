@@ -5,13 +5,6 @@ import { settingsManager } from '@/stores/settings-store';
 import { DEFAULT_SHORTCUTS } from '@/types/shortcuts';
 
 // Mock dependencies
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    info: vi.fn(),
-    debug: vi.fn(),
-    error: vi.fn(),
-  },
-}));
 
 vi.mock('@/stores/settings-store', () => ({
   settingsManager: {

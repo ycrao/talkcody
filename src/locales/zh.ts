@@ -761,6 +761,16 @@ const zh: LocaleDefinition = {
     githubTooltip: '在 GitHub 上为 TalkCody 点赞',
   },
 
+  Sidebar: {
+    files: '文件',
+    tasks: '任务',
+    filesTab: '文件树',
+    tasksTab: '任务历史',
+    toggleView: '切换侧边栏视图',
+    collapse: '折叠侧边栏',
+    expand: '展开侧边栏',
+  },
+
   Logs: {
     title: '日志',
     description: '查看应用程序日志',

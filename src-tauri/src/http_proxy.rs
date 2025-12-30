@@ -308,7 +308,7 @@ pub async fn proxy_fetch_stream(request: ProxyRequest) -> Result<ProxyResponse, 
 
     // Use per-chunk timeout instead of total timeout
     // This allows long-running streams as long as data keeps arriving
-    let chunk_timeout = Duration::from_secs(30);
+    let chunk_timeout = Duration::from_secs(300);
 
     let mut body_chunks = Vec::new();
     let mut stream = response.bytes_stream();
@@ -443,10 +443,8 @@ pub async fn stream_fetch(
     let event_name_clone = event_name.clone();
     tauri::async_runtime::spawn(async move {
         let mut stream = response.bytes_stream();
-        let chunk_timeout = Duration::from_secs(30);
+        let chunk_timeout = Duration::from_secs(300);
         let mut chunk_count = 0;
-
-        log::info!("Starting to stream chunks (request_id: {}, event: {})", request_id, event_name_clone);
 
         loop {
             let chunk_result = timeout(chunk_timeout, stream.next()).await;

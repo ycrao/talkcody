@@ -1,5 +1,4 @@
 import { AgentMarketplacePage } from '@/pages/agent-marketplace-page';
-import { ChatOnlyPage } from '@/pages/chat-page';
 import { ExplorerPage } from '@/pages/explorer-page';
 import { LogsPage } from '@/pages/logs-page';
 import { MCPServersPage } from '@/pages/mcp-servers-page';
@@ -15,13 +14,9 @@ interface MainContentProps {
 export function MainContent({ activeView }: MainContentProps) {
   return (
     <div className="h-full w-full">
-      {/* Keep ExplorerPage and ChatOnlyPage mounted to preserve state */}
+      {/* Keep ExplorerPage and ChatOnlyPage mounted to preserve state (legacy) */}
       <div className={activeView === NavigationView.EXPLORER ? 'h-full' : 'hidden'}>
         <ExplorerPage />
-      </div>
-
-      <div className={activeView === NavigationView.CHAT ? 'h-full' : 'hidden'}>
-        <ChatOnlyPage />
       </div>
 
       {/* Lazy load these pages to avoid unnecessary network requests on startup */}

@@ -19,15 +19,7 @@ vi.mock('@/providers/custom/custom-provider-service', () => ({
   },
 }));
 
-vi.mock('@/lib/logger', () => ({
-  logger: {
-    trace: vi.fn(),
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
+// Note: Logger is already mocked globally in setup.ts
 
 vi.mock('@/stores/settings-store', () => ({
   settingsManager: {
