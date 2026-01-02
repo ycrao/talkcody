@@ -3,7 +3,7 @@ name: Release Linux
 on:
   push:
     tags:
-      - 'v*-linux'
+      - 't*-linux'
 
 permissions:
   contents: write
