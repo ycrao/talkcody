@@ -1,0 +1,150 @@
+name: Release Linux
+
+on:
+  push:
+    tags:
+      - 'v*-linux'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          # Extract version from tag (e.g., v0.1.8-linux -> 0.1.8)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=${VERSION%-linux}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }} (Linux)
+          draft: false
+          prerelease: false
+          body: |
+            ## What's Changed (Linux Release)
+
+            Download packages for all platforms at: https://www.talkcody.com/docs/introduction/client-downloads
+
+  build-linux:
+    name: Build Linux AppImage
+    needs: create-release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            jq \
+            ibus \
+            ibus-gtk \
+            fcitx5 \
+            fcitx5-frontend-gtk3
+
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Tauri app
+        run: |
+          jq '.bundle.createUpdaterArtifacts = true' src-tauri/tauri.conf.json > /tmp/tauri.conf.json.tmp
+          mv /tmp/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          bun run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+
+      - name: Get AppImage file path
+        id: get_appimage
+        run: |
+          APPIMAGE_PATH=$(find src-tauri/target/release/bundle/appimage -name "*.AppImage" | head -n 1)
+          echo "appimage_path=$APPIMAGE_PATH" >> $GITHUB_OUTPUT
+          echo "appimage_name=$(basename $APPIMAGE_PATH)" >> $GITHUB_OUTPUT
+
+      - name: Fail if AppImage not found
+        if: ${{ steps.get_appimage.outputs.appimage_path == '' }}
+        run: |
+          echo "No AppImage artifact found in expected path. Listing bundle directory:"
+          ls -la src-tauri/target/release/bundle || true
+          exit 1
+
+      - name: Upload AppImage to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.get_appimage.outputs.appimage_path }}
+          asset_name: ${{ steps.get_appimage.outputs.appimage_name }}
+          asset_content_type: application/octet-stream
+
+      - name: Upload updater bundle to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_content_type: application/gzip
+
+      - name: Get updater bundle signature path
+        id: get_bundle_sig
+        run: |
+          SIG_PATH=$(find src-tauri/target/release/bundle/appimage -name "*.tar.gz.sig" | head -n 1)
+          echo "sig_path=$SIG_PATH" >> $GITHUB_OUTPUT
+          if [ -n "$SIG_PATH" ]; then
+            echo "sig_name=$(basename $SIG_PATH)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload updater bundle signature to Release
+        if: ${{ steps.get_bundle_sig.outputs.sig_path != '' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.get_bundle_sig.outputs.sig_path }}
+          asset_name: ${{ steps.get_bundle_sig.outputs.sig_name }}
+          asset_content_type: application/octet-stream
